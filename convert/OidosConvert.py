@@ -745,7 +745,7 @@ def makeMusic(xsong):
 def printMusicStats(music):
 	print "Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength)
 	ii = None
-	for ti in music.track_order:
+	for ti,tn in enumerate(music.track_order):
 		if music.n_reverb_tracks > 0 and ti == 0:
 			print
 			print "Tracks with reverb:"
@@ -753,7 +753,7 @@ def printMusicStats(music):
 			print
 			print "Tracks without reverb:"
 
-		track = music.tracks[ti]
+		track = music.tracks[tn]
 		if track.instr != ii:
 			print
 			ii = track.instr
