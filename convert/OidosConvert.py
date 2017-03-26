@@ -63,6 +63,37 @@ class Instrument:
 		self.title = "%02X|%s" % (self.number, self.name)
 
 
+class Reverb:
+	NAMES = ["mix", "pan", "delaymin", "delaymax", "delayadd",
+			 "halftime", "filterlow", "filterhigh", "dampenlow", "dampenhigh",
+			 "n", "seed", "dummy1", "dummy2", "dummy3",
+			 "q_mixpan", "q_flow", "q_fhigh", "q_dlow", "q_dhigh"
+	]
+
+	def __init__(self, params):
+		names = Reverb.NAMES
+		self.params = (params + [0.0] * len(names))[:len(names)]
+		for i,p in enumerate(self.params):
+			self.__dict__[names[i]] = p
+
+		self.p_min_delay   = math.floor(self.delaymin * 100 + 0.5) * 256
+		self.p_max_delay   = math.floor(self.delaymax * 100 + 0.5) * 256
+		self.p_add_delay   = math.floor(self.delayadd * 100 + 0.5) * 256
+		self.p_filter_low  = min(1, quantize(math.pow(self.filterlow,  2), self.q_flow))
+		self.p_filter_high = min(1, quantize(math.pow(self.filterhigh, 2), self.q_fhigh))
+		self.p_dampen_low  = min(1, quantize(math.pow(self.dampenlow,  2), self.q_dlow))
+		self.p_dampen_high = min(1, quantize(math.pow(self.dampenhigh, 2), self.q_dhigh))
+		self.p_num_delays  = math.floor(self.n * 50 + 0.5) * 2
+		self.p_seed        = math.floor(self.seed * 100 + 0.5) * 2048
+		self.p_attenuation = math.pow(0.5, 1.0 / (self.halftime * SAMPLERATE))
+
+		mix = self.mix * 10 / math.sqrt(self.p_num_delays)
+		self.p_volumes       = [quantize(mix * math.sqrt(1 + s - 2 * s * self.pan), self.q_mixpan) for s in [1,-1]]
+
+	def __eq__(self, other):
+		return all(p1 == p2 for p1,p2 in zip(self.params, other.params))
+
+
 class Note:
 	NOTEBASES = {
 		"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11
@@ -116,15 +147,21 @@ def isactive(xdevice):
 		return str(xdevice.IsActive) == "true"
 
 
+def f2i(f):
+	return struct.unpack('I', struct.pack('f', f))[0]
+
+def i2f(i):
+	return struct.unpack('f', struct.pack('I', i))[0]
+
 def quantize(value, level):
 	bit = 1 << int(math.floor(level * 31))
 	mask = 0x100000000 - bit
 	add = bit >> 1
-	i = struct.unpack('I', struct.pack('f', value))[0]
+	i = f2i(value)
 	i = (i + add) & mask
 	if i == 0x80000000:
 		i = 0x00000000
-	q = struct.unpack('f', struct.pack('I', i))[0]
+	q = i2f(i)
 	return q
 
 def makeParamBlock(inst, uses_panning):
@@ -247,27 +284,45 @@ class Track:
 
 
 class Music:
-	def __init__(self, tracks, instruments, length, ticklength, n_delay_tracks, delay_lengths, delay_strength, master_volume):
+	def __init__(self, tracks, instruments, length, ticklength, n_reverb_tracks, reverb, master_volume):
 		self.tracks = tracks
 		self.instruments = instruments
 		self.length = length
 		self.ticklength = ticklength
-		self.n_delay_tracks = n_delay_tracks
-		self.delay_lengths = delay_lengths
-		self.delay_strength = delay_strength
+		self.n_reverb_tracks = n_reverb_tracks
+		self.reverb = reverb
 		self.master_volume = master_volume
+
+		# Reorder instruments according to reverb
+		self.instrument_map = dict()
+		with_reverb = set(t.instr for t in self.tracks[:self.n_reverb_tracks])
+		without_reverb = set(t.instr for t in self.tracks[self.n_reverb_tracks:])
+		instruments_with_reverb = []
+		instruments_without_reverb = []
+		for instr in self.instruments:
+			if instr is None:
+				continue
+			self.instrument_map[instr.number] = instr
+
+			if instr.number in with_reverb:
+				if instr.number in without_reverb:
+					raise InputException("Instrument '%s' is used both with and without reverb" % instr.title)
+				instruments_with_reverb.append(instr)
+			if instr.number in without_reverb:
+				instruments_without_reverb.append(instr)
+
+		self.instruments = instruments_with_reverb + instruments_without_reverb
+		self.n_reverb_instruments = len(instruments_with_reverb)
 
 		# Calculate track order and velocity set
 		self.track_order = []
 		self.uses_panning = False
-		for ii,instr in enumerate(self.instruments):
-			if instr is None:
-				continue
+		for instr in self.instruments:
 			velocities = set()
 			instr.columns = 0
 			volume = None
 			for ti,track in enumerate(self.tracks):
-				if track.instr == ii:
+				if track.instr == instr.number:
 					self.track_order.append(ti)
 					instr.columns += 1
 					v = track.volume * self.master_volume
@@ -291,13 +346,11 @@ class Music:
 		# Calculate longest sample
 		self.max_maxsamples = 0
 		self.max_total_samples = 0
-		for ii,instr in enumerate(self.instruments):
-			if instr is None:
-				continue
+		for instr in self.instruments:
 			instr.maxtime = 0
 			tones = set()
 			for ti,track in enumerate(self.tracks):
-				if track.instr != ii:
+				if track.instr != instr.number:
 					continue
 				instr.maxtime = max(instr.maxtime, track.max_length * ticklength)
 				for note in track.notes:
@@ -377,24 +430,34 @@ class Music:
 		def roundup(v):
 			return (int(v) & -0x10000) + 0x10000
 
-		num_instruments = sum(1 for instr in self.instruments if instr is not None)
-
 		global infile
 		self.out += "; Music converted from %s %s\n" % (infile, str(datetime.datetime.now())[:-7])
 		self.out += "\n"
-		self.out += "%%define SAMPLES_PER_TICK %d\n" % spt
-		self.out += "%%define MAX_TOTAL_INSTRUMENT_SAMPLES %d\n" % roundup(self.max_total_samples)
-		self.out += "%%define TOTAL_SAMPLES %d\n" % roundup((self.length * self.ticklength) * SAMPLERATE + self.max_maxsamples)
-		self.out += "\n"
-		#self.out += "%%define MAX_DELAY_LENGTH %d\n" % int(max(self.delay_lengths) * SAMPLERATE)
-		#self.out += "%%define LEFT_DELAY_LENGTH %d\n" % int(self.delay_lengths[0] * SAMPLERATE)
-		#self.out += "%%define RIGHT_DELAY_LENGTH %d\n" % int(self.delay_lengths[1] * SAMPLERATE)
-		#self.out += "%%define DELAY_STRENGTH %0.8f\n" % self.delay_strength
-		#self.out += "\n"
-		self.out += "%%define NUMTRACKS %d\n" % num_instruments
-		#self.out += "%%define LOGNUMTICKS %d\n" % int(math.log(self.length, 2) + 1)
 		self.out += "%%define MUSIC_LENGTH %d\n" % self.length
-		self.out += "%%define TICKS_PER_SECOND %0.8f\n" % (1.0 / self.ticklength)
+		self.out += "%%define TOTAL_SAMPLES %d\n" % roundup((self.length * self.ticklength) * SAMPLERATE + self.max_maxsamples)
+		self.out += "%%define MAX_TOTAL_INSTRUMENT_SAMPLES %d\n" % roundup(self.max_total_samples)
+		self.out += "\n"
+		self.out += "%%define SAMPLES_PER_TICK %d\n" % spt
+		self.out += "%%define TICKS_PER_SECOND %.9f\n" % (1.0 / self.ticklength)
+		self.out += "\n"
+		self.out += "%%define NUM_TRACKS_WITH_REVERB %d\n" % self.n_reverb_instruments
+		self.out += "%%define NUM_TRACKS_WITHOUT_REVERB %d\n" % (len(self.instruments) - self.n_reverb_instruments)
+
+		if self.n_reverb_instruments > 0:
+			reverb = self.reverb
+			self.out += "\n"
+			self.out += "%%define REVERB_NUM_DELAYS   %d\n" % reverb.p_num_delays
+			self.out += "%%define REVERB_MIN_DELAY    %d\n" % reverb.p_min_delay
+			self.out += "%%define REVERB_MAX_DELAY    %d\n" % reverb.p_max_delay
+			self.out += "%%define REVERB_ADD_DELAY    %d\n" % reverb.p_add_delay
+			self.out += "%%define REVERB_RANDOMSEED   %d\n" % reverb.p_seed
+			self.out += "%%define REVERB_ATTENUATION  %.9f\n" % reverb.p_attenuation
+			self.out += "%%define REVERB_FILTER_HIGH  0x%08X ; %.9f\n" % (f2i(reverb.p_filter_high), reverb.p_filter_high)
+			self.out += "%%define REVERB_FILTER_LOW   0x%08X ; %.9f\n" % (f2i(reverb.p_filter_low), reverb.p_filter_low)
+			self.out += "%%define REVERB_DAMPEN_HIGH  0x%08X ; %.9f\n" % (f2i(reverb.p_dampen_high), reverb.p_dampen_high)
+			self.out += "%%define REVERB_DAMPEN_LOW   0x%08X ; %.9f\n" % (f2i(reverb.p_dampen_low), reverb.p_dampen_low)
+			self.out += "%%define REVERB_VOLUME_LEFT  0x%08X ; %.9f\n" % (f2i(reverb.p_volumes[0]), reverb.p_volumes[0])
+			self.out += "%%define REVERB_VOLUME_RIGHT 0x%08X ; %.9f\n" % (f2i(reverb.p_volumes[1]), reverb.p_volumes[1])
 
 		if self.uses_panning:
 			self.out += "\n%define USES_PANNING\n"
@@ -402,10 +465,8 @@ class Music:
 		# Instrument parameters
 		self.out += "\n\n\tsection iparam data align=4\n"
 		self.out += "\n_InstrumentParams:\n"
-		for ii,instr in enumerate(self.instruments):
-			if instr is None:
-				continue
-			self.label(".i%02d" % ii)
+		for instr in self.instruments:
+			self.label(".i%02d" % instr.number)
 			self.comment(instr.title)
 			self.out += "\tdd\t"
 			first = True
@@ -413,7 +474,7 @@ class Music:
 				if not first:
 					self.out += ","
 				if isinstance(p, float):
-					self.out += "0x%08X" % struct.unpack('I', struct.pack('f', p))[0]
+					self.out += "0x%08X" % f2i(p)
 				else:
 					self.out += "%d" % p
 				first = False
@@ -423,10 +484,8 @@ class Music:
 		# Instrument tones
 		self.out += "\n\n\tsection itones data align=1\n"
 		self.out += "\n_InstrumentTones:\n"
-		for ii,instr in enumerate(self.instruments):
-			if instr is None:
-				continue
-			self.label(".i%02d" % ii)
+		for instr in self.instruments:
+			self.label(".i%02d" % instr.number)
 			self.comment(instr.title)
 			self.out += "\tdb\t"
 			prev_tone = 0
@@ -441,10 +500,8 @@ class Music:
 		self.out += "\n_TrackData:\n"
 		for ti in self.track_order:
 			track = self.tracks[ti]
-			instr = self.instruments[track.instr]
+			instr = self.instrument_map[track.instr]
 
-			#if self.n_delay_tracks > 0 and ti == self.n_delay_tracks:
-			#	self.dataline([-1])
 			self.label(".t_%s_%d" % (track.labelname, track.column))
 			self.comment(track.title)
 
@@ -562,36 +619,29 @@ def extractTrackNotes(xsong, tr, col):
 
 	return notes2
 
-def pickupDelay(xdevices, delay_lengths, delay_strength, tname, ticklength):
-	if isactive(xdevices.DelayDevice):
-		send = float(xdevices.DelayDevice.TrackSend.Value) / 127.0
-		lfeedback = float(xdevices.DelayDevice.LFeedback.Value)
-		rfeedback = float(xdevices.DelayDevice.RFeedback.Value)
-		if float(xdevices.DelayDevice.LineSync.Value):
-			lsynctime = float(xdevices.DelayDevice.LSyncTime.Value)
-			lsyncoffset = float(xdevices.DelayDevice.LSyncOffset.Value)
-			ldelay = (lsynctime + lsyncoffset) * ticklength
-			rsynctime = float(xdevices.DelayDevice.RSyncTime.Value)
-			rsyncoffset = float(xdevices.DelayDevice.RSyncOffset.Value)
-			rdelay = (rsynctime + rsyncoffset) * ticklength
-		else:
-			ldelay = float(xdevices.DelayDevice.LDelay.Value) / 1000.0
-			rdelay = float(xdevices.DelayDevice.RDelay.Value) / 1000.0
-		if abs(lfeedback - send) > 0.05:
-			print " * Track '%s': Left feedback (%0.2f) is different from send value (%0.2f)" % (tname, lfeedback, send)
-		if abs(rfeedback - send) > 0.05:
-			print " * Track '%s': Right feedback (%0.2f) is different from send value (%0.2f)" % (tname, rfeedback, send)
-		if delay_lengths != [0.0, 0.0] and ([ldelay,rdelay] != delay_lengths or send != delay_strength):
-			print " * Track '%s' has different delay parameters from earlier track" % tname
-		return [ldelay,rdelay],send
-	return delay_lengths,delay_strength
+def pickupReverb(xdevices, reverb, tname, ticklength):
+	xplugin = xdevices.AudioPluginDevice
+	if len(xplugin) > 1:
+		raise InputException("Track '%s' has more than one plugin device" % tname);
+
+	if isactive(xplugin):
+		if str(xplugin.PluginIdentifier) != "MetaEffect":
+			raise InputException("Track '%s' has an unknown plugin device" % tname);
+
+		params = [float(x) for x in xplugin.Parameters.Parameter.Value]
+		new_reverb = Reverb(params)
+
+		if reverb is not None and not new_reverb == reverb:
+			raise InputException("Track '%s' has different reverb from an earlier track" % tname);
+		reverb = new_reverb
+
+	return reverb
 
 def makeTracks(xsong, ticklength):
 	instruments = []
-	delay_tracks = []
-	non_delay_tracks = []
-	delay_lengths = [0.0, 0.0]
-	delay_strength = 0.0
+	reverb_tracks = []
+	non_reverb_tracks = []
+	reverb = None
 
 	for ii,xinst in enumerate(xsong.Instruments.Instrument):
 		params = [float(v) for v in instplugins(xinst).PluginDevice.Parameters.Parameter.Value]
@@ -613,8 +663,8 @@ def makeTracks(xsong, ticklength):
 		volume = makeVolume(xdevice.Volume.Value)
 		volume *= makePanning(xdevice.Panning.Value)
 		while isactive(xdevices.SendDevice):
-			if isactive(xdevices.DelayDevice):
-				raise InputException("Track '%s' uses both delay and send" % tname);
+			if isactive(xdevices.AudioPluginDevice):
+				raise InputException("Track '%s' uses both reverb and send" % tname);
 			if str(xdevices.SendDevice.MuteSource) != "true":
 				raise InputException("Track '%s' uses send without Mute Source" % tname);
 			volume *= makeVolume(xdevices.SendDevice.SendAmount.Value)
@@ -643,22 +693,19 @@ def makeTracks(xsong, ticklength):
 
 			for instr in track_instrs:
 				track = Track(tr, col + 1, tname, notes, volume, instruments)
-				if isactive(xdevices.DelayDevice):
-					delay_tracks.append(track)
+				if isactive(xdevices.AudioPluginDevice):
+					reverb_tracks.append(track)
 				else:
-					non_delay_tracks.append(track)
+					non_reverb_tracks.append(track)
 	
-		delay_lengths,delay_strength = pickupDelay(xdevices, delay_lengths, delay_strength, tname, ticklength)
+		reverb = pickupReverb(xdevices, reverb, tname, ticklength)
 
 	for xtrack in xsong.Tracks.SequencerSendTrack:
 		xdevices = xtrack.FilterDevices.Devices
-		if xdevices.DelayDevice:
-			delay_lengths,delay_strength = pickupDelay(xdevices, delay_lengths, delay_strength, tname, ticklength)
+		if xdevices.AudioPluginDevice:
+			reverb = pickupReverb(xdevices, reverb, tname, ticklength)
 
-	#delay_tracks = sorted(delay_tracks, key = (lambda t : t.instr))
-	#non_delay_tracks = sorted(non_delay_tracks, key = (lambda t : t.instr))
-
-	return (delay_tracks + non_delay_tracks), len(delay_tracks), delay_lengths, delay_strength, instruments
+	return (reverb_tracks + non_reverb_tracks), len(reverb_tracks), reverb, instruments
 
 def makeMusic(xsong):
 	xgsd = xsong.GlobalSongData
@@ -671,7 +718,7 @@ def makeMusic(xsong):
 	ticklength = 60.0 / lines_per_minute
 	print
 
-	tracks,n_delay_tracks,delay_lengths,delay_strength,instruments = makeTracks(xsong, ticklength)
+	tracks,n_reverb_tracks,reverb,instruments = makeTracks(xsong, ticklength)
 
 	xpositions = xsong.PatternSequence.PatternSequence.Pattern
 	if not xpositions:
@@ -692,18 +739,25 @@ def makeMusic(xsong):
 	master_volume *= makeVolume(xmstdev.PostVolume.Value)
 	master_volume *= makePanning(xmstdev.PostPanning.Value)
 
-	return Music(tracks, instruments, length, ticklength, n_delay_tracks, delay_lengths, delay_strength, master_volume)
+	return Music(tracks, instruments, length, ticklength, n_reverb_tracks, reverb, master_volume)
 
 
 def printMusicStats(music):
 	print "Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength)
 	ii = None
 	for ti in music.track_order:
+		if music.n_reverb_tracks > 0 and ti == 0:
+			print
+			print "Tracks with reverb:"
+		if music.n_reverb_tracks > 0 and ti == music.n_reverb_tracks:
+			print
+			print "Tracks without reverb:"
+
 		track = music.tracks[ti]
 		if track.instr != ii:
 			print
 			ii = track.instr
-			instr = music.instruments[ii]
+			instr = music.instrument_map[ii]
 			modes = instr.paramblock[0]
 			fat = instr.paramblock[1]
 			longest = float(instr.paramblock[15]) / SAMPLERATE
@@ -734,13 +788,6 @@ def printMusicStats(music):
 				if track.notemap[n] == (t,v):
 					num_notes += 1
 			tnotes += " %s/%02X(%d)" % (notename(t), v, num_notes)
-		if music.n_delay_tracks > 0 and ti == 0:
-			print "Tracks with delay:"
-			print
-		if music.n_delay_tracks > 0 and ti == music.n_delay_tracks:
-			print
-			print "Tracks without delay:"
-			print
 		print "  Notes:    " + tnotes
 
 

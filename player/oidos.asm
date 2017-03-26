@@ -6,6 +6,9 @@
 ; appropriate for typical display latencies for high-framerate effects.
 %define OIDOS_TIMER_OFFSET 2048
 
+; Set to 0 if you don't care about Oidos_GenerateMusic preserving registers
+%define OIDOS_SAVE_REGISTERS 1
+
 %include "music.asm"
 
 
@@ -107,7 +110,18 @@ MixingBuffer:
 	resq	TOTAL_SAMPLES
 	resq	TOTAL_SAMPLES
 
+%if NUM_TRACKS_WITH_REVERB > 0
+section revbuf bss align=16
+ReverbBuffer:
+.align24:
+	resq	TOTAL_SAMPLES
+	resq	TOTAL_SAMPLES
 
+section delbuf bss align=8
+DelayBuffer:
+.align16:
+	resq	25600
+%endif
 
 ;; ********** Internal structures **********
 
@@ -143,8 +157,16 @@ baseptr:
 
 c_oneone:		dq		1.0,1.0
 c_twelve:		dd		12
+c_ampmax:		dd		32767
 c_randscale:	dd		0x30000000	; 2^-31
 c_basefreq:		dd		BASE_FREQ
+
+%if NUM_TRACKS_WITH_REVERB > 0
+ReverbAttenuation:
+	dd	REVERB_ATTENUATION
+ReverbParams:
+	dd	REVERB_FILTER_HIGH, REVERB_FILTER_LOW, REVERB_DAMPEN_HIGH, REVERB_DAMPEN_LOW, REVERB_VOLUME_LEFT
+%endif
 
 ParamsPtr:		dd	_InstrumentParams
 TonesPtr:		dd	_InstrumentTones
@@ -153,9 +175,10 @@ LengthPtr:		dd	_NoteLengths
 NotePtr:		dd	_NoteSamples
 MixingPtr:		dd	0
 
-section ampmax rdata align=4
-c_ampmax:
-	dd		32767
+%if NUM_TRACKS_WITH_REVERB > 0
+ReverbState:
+	dq	0,0,0,0
+%endif
 
 section offset rdata align=4
 c_timeoffset:
@@ -211,7 +234,7 @@ c_ticklength:
 ;; ********** Instrument calculation **********
 
 section makeinst text align=1
-makeinstrument:
+MakeInstrument:
 	mov				PARAMS, [BASE + ParamsPtr]
 
 	; tone
@@ -420,11 +443,7 @@ makeinstrument:
 ;; ********** Track mixing **********
 
 	section makechan text align=1
-makechannel:
-	pusha
-
-	mov				ebp, baseptr
-
+MakeChannel:
 	mov				SAMPLE, SampleBuffer
 	push			byte 0
 .tonesloop:
@@ -435,13 +454,13 @@ makechannel:
 	add				[esp], eax
 	js				.tonesdone
 	fild			dword [esp]
-	call			makeinstrument
+	call			MakeInstrument
 	jmp				.tonesloop
 .tonesdone:
 	pop				eax
 
 .column:
-	mov				MIXING, MixingBuffer
+	mov				dword [BASE + MixingPtr], MixingBuffer
 
 	; Delta decode tones
 	mov				TOVEL, [BASE + TovelPtr]
@@ -455,7 +474,7 @@ makechannel:
 	add				[BASE + TovelPtr], eax
 
 .notesloop:
-	mov				[BASE + MixingPtr], MIXING
+	mov				MIXING, [BASE + MixingPtr]
 
 	; Read note length
 	xor				eax, eax
@@ -562,8 +581,6 @@ makechannel:
 	loop			.mixingloop
 
 .nextnote:
-	mov				MIXING, [BASE + MixingPtr]
-
 	pop				eax
 	dec				eax
 	jns near		.notesloop
@@ -575,8 +592,6 @@ makechannel:
 	js				.column
 
 	mov				[BASE + ParamsPtr], PARAMS
-
-	popa
 	ret
 
 
@@ -584,33 +599,150 @@ makechannel:
 
 section synth text align=1
 _Oidos_GenerateMusic:
+%if OIDOS_SAVE_REGISTERS
+	pusha
+%endif
 	fninit
 
-	mov				ecx, NUMTRACKS
-.loop:
-	call			makechannel
-	loop			.loop
+	mov				ebp, baseptr
 
-	; Clamp and convert to shorts
-	fild			dword [c_ampmax]
-	mov				eax, MixingBuffer
-	mov				edx, _Oidos_MusicBuffer
-	mov				ecx, TOTAL_SAMPLES*2
-.sloop:
-	fld				qword [eax]
-	add				eax, byte 8
-	fcomi			st0, st1
-	fcmovnb			st0, st1
-	fchs
-	fcomi			st0, st1
-	fcmovnb			st0, st1
-	fchs
+%if NUM_TRACKS_WITH_REVERB > 0
+	push			byte NUM_TRACKS_WITH_REVERB
+.loop1:
+	call			MakeChannel
+	dec				dword [esp]
+	jne				.loop1
+	pop				ebx
 
-	fistp			word [edx]
-	add				edx, byte 2
-	loop			.sloop
+	mov				esi, REVERB_NUM_DELAYS
+	mov				ecx, REVERB_MAX_DELAY - REVERB_MIN_DELAY
+.delayloop:
+	; Is this delay length included?
+	mov				eax, dword [_Oidos_RandomData + REVERB_RANDOMSEED*4 + ecx*4]
+	mul				ecx
+	cmp				edx, esi
+	jae short		.skip
+
+	; Decay factor
+	push			ecx
+	add				ecx, REVERB_MIN_DELAY
+	push			ecx
+	fld1
+.decay:
+	fmul			dword [BASE + ReverbAttenuation]
+	loop			.decay
+	pop				ecx
+
+.feedbackloop:
+	; Index into delay buffer
+	xor				edx, edx
+	mov				eax, ebx
+	shr				eax, 1
+	div				ecx
+	lea				eax, [DelayBuffer + edx*8]
+
+	lea				PARAMS, [BASE + ReverbParams]
+	lea				edi, [BASE + ReverbState]
+
+	; Filter input
+	fld				qword [MixingBuffer + ebx*8]
+	call			ReverbFilter
+
+	; Filter echo
+	fld				qword [eax]			; delayed value
+	call			ReverbFilter
+
+	; Extract delayed signal
+	fld				qword [eax]			; delayed value
+	fmul			dword [PARAMS]		; volume
+	fadd			qword [ReverbBuffer + REVERB_ADD_DELAY*16 + ebx*8]
+	fstp			qword [ReverbBuffer + REVERB_ADD_DELAY*16 + ebx*8]
+
+	; Attenuate echo and add to input
+	fmul			st0, st2			; feedback factor
+	faddp			st1
+	fstp			qword [eax]
+
+	add				ebx, byte 2
+	cmp				ebx, TOTAL_SAMPLES*2
+	jb				.feedbackloop
+
 	fstp			st0
 
+%if REVERB_VOLUME_LEFT != REVERB_VOLUME_RIGHT
+	; Alternate between left and right volume
+	xor				dword [PARAMS], REVERB_VOLUME_LEFT ^ REVERB_VOLUME_RIGHT
+%endif
+
+	; Switch side
+	and				ebx, byte 1
+	xor				ebx, byte 1
+
+	dec				esi
+	pop				ecx
+.skip:
+	loop			.delayloop
+%endif
+
+%if NUM_TRACKS_WITHOUT_REVERB > 0
+	push			byte NUM_TRACKS_WITHOUT_REVERB
+.loop2:
+	call			MakeChannel
+	dec				dword [esp]
+	jne				.loop2
+	pop				ebx
+%endif
+
+	; Clamp and convert to shorts
+	fild			dword [BASE + c_ampmax]
+.sloop:
+	fld				qword [MixingBuffer + ebx*8]
+%if NUM_TRACKS_WITH_REVERB > 0
+	fadd			qword [ReverbBuffer + ebx*8]
+%endif
+	fcomi			st0, st1
+	fcmovnb			st0, st1
+	fchs
+	fcomi			st0, st1
+	fcmovnb			st0, st1
+	fchs
+
+	fistp			word [_Oidos_MusicBuffer + ebx*2]
+
+	add				ebx, byte 1
+	cmp				ebx, TOTAL_SAMPLES*2
+	jb				.sloop
+	fstp			st0
+
+%if OIDOS_SAVE_REGISTERS
+	popa
+%endif
+	ret
+
+section rfilter text align=1
+ReverbFilter:
+%macro FILTER 0
+	; Basic low-pass filter
+	fsub			qword [edi]			; filter state
+	fmul			dword [PARAMS]		; filter parameter
+	add				PARAMS, byte 4
+	fadd			qword [edi]
+
+	; Avoid denormals
+	fld1
+	fadd			st1, st0
+	fsubp			st1, st0
+
+	fst				qword [edi]
+	add				edi, byte 8
+%endmacro
+
+	; Difference between two low-pass filters
+	fld				st0
+	FILTER
+	fxch			st1
+	FILTER
+	fsubp			st1
 	ret
 
 
