@@ -157,13 +157,15 @@ baseptr:
 
 c_oneone:		dq		1.0,1.0
 c_twelve:		dd		12
-c_ampmax:		dd		32767
 c_randscale:	dd		0x30000000	; 2^-31
+c_ampmax:		dd		32767.0
 c_basefreq:		dd		BASE_FREQ
 
 %if NUM_TRACKS_WITH_REVERB > 0
-ReverbAttenuation:
-	dd	REVERB_ATTENUATION
+ReverbMaxDecay:
+	dd	REVERB_MAX_DECAY
+ReverbDecayMul:
+	dd	REVERB_DECAY_MUL
 ReverbParams:
 	dd	REVERB_FILTER_HIGH, REVERB_FILTER_LOW, REVERB_DAMPEN_HIGH, REVERB_DAMPEN_LOW, REVERB_VOLUME_LEFT
 %endif
@@ -614,24 +616,18 @@ _Oidos_GenerateMusic:
 	jne				.loop1
 	pop				ebx
 
+	fld				dword [BASE + ReverbMaxDecay]
 	mov				esi, REVERB_NUM_DELAYS
-	mov				ecx, REVERB_MAX_DELAY - REVERB_MIN_DELAY
+	mov				ecx, REVERB_MAX_DELAY
 .delayloop:
 	; Is this delay length included?
-	mov				eax, dword [_Oidos_RandomData + REVERB_RANDOMSEED*4 + ecx*4]
-	mul				ecx
+	mov				eax, ecx
+%if REVERB_MIN_DELAY != 0
+	sub				eax, REVERB_MIN_DELAY
+%endif
+	mul				dword [_Oidos_RandomData + REVERB_RANDOMSEED*4 + ecx*4]
 	cmp				edx, esi
 	jae short		.skip
-
-	; Decay factor
-	push			ecx
-	add				ecx, REVERB_MIN_DELAY
-	push			ecx
-	fld1
-.decay:
-	fmul			dword [BASE + ReverbAttenuation]
-	loop			.decay
-	pop				ecx
 
 .feedbackloop:
 	; Index into delay buffer
@@ -667,8 +663,6 @@ _Oidos_GenerateMusic:
 	cmp				ebx, TOTAL_SAMPLES*2
 	jb				.feedbackloop
 
-	fstp			st0
-
 %if REVERB_VOLUME_LEFT != REVERB_VOLUME_RIGHT
 	; Alternate between left and right volume
 	xor				dword [PARAMS], REVERB_VOLUME_LEFT ^ REVERB_VOLUME_RIGHT
@@ -679,9 +673,10 @@ _Oidos_GenerateMusic:
 	xor				ebx, byte 1
 
 	dec				esi
-	pop				ecx
 .skip:
+	fmul			dword [BASE + ReverbDecayMul]
 	loop			.delayloop
+	fstp			st0
 %endif
 
 %if NUM_TRACKS_WITHOUT_REVERB > 0
@@ -694,7 +689,7 @@ _Oidos_GenerateMusic:
 %endif
 
 	; Clamp and convert to shorts
-	fild			dword [BASE + c_ampmax]
+	fld				dword [BASE + c_ampmax]
 .sloop:
 	fld				qword [MixingBuffer + ebx*8]
 %if NUM_TRACKS_WITH_REVERB > 0

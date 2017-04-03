@@ -106,7 +106,7 @@ function process(num_events, events, num_samples, inputs, outputs, program)
 	local b = 0
 	for delay = delaymax, delaymin+1, -1 do
 		-- Random value as unsigned integer
-		local random = randomdata[seed + delay - delaymin]
+		local random = randomdata[seed + delay]
 		if random < 0 then
 			random = random + 0x100000000
 		end

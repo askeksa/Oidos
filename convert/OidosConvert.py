@@ -85,7 +85,8 @@ class Reverb:
 		self.p_dampen_high = min(1, quantize(math.pow(self.dampenhigh, 2), self.q_dhigh))
 		self.p_num_delays  = math.floor(self.n * 50 + 0.5) * 2
 		self.p_seed        = math.floor(self.seed * 100 + 0.5) * 2048
-		self.p_attenuation = math.pow(0.5, 1.0 / (self.halftime * SAMPLERATE))
+		self.p_decay_mul   = math.pow(2.0, 1.0 / (self.halftime * SAMPLERATE))
+		self.p_max_decay   = math.pow(self.p_decay_mul, -self.p_max_delay)
 
 		mix = self.mix * 10 / math.sqrt(self.p_num_delays)
 		self.p_volumes       = [quantize(mix * math.sqrt(1 + s - 2 * s * self.pan), self.q_mixpan) for s in [1,-1]]
@@ -451,7 +452,8 @@ class Music:
 			self.out += "%%define REVERB_MAX_DELAY    %d\n" % reverb.p_max_delay
 			self.out += "%%define REVERB_ADD_DELAY    %d\n" % reverb.p_add_delay
 			self.out += "%%define REVERB_RANDOMSEED   %d\n" % reverb.p_seed
-			self.out += "%%define REVERB_ATTENUATION  %.9f\n" % reverb.p_attenuation
+			self.out += "%%define REVERB_MAX_DECAY    %.9f\n" % reverb.p_max_decay
+			self.out += "%%define REVERB_DECAY_MUL    %.9f\n" % reverb.p_decay_mul
 			self.out += "%%define REVERB_FILTER_HIGH  0x%08X ; %.9f\n" % (f2i(reverb.p_filter_high), reverb.p_filter_high)
 			self.out += "%%define REVERB_FILTER_LOW   0x%08X ; %.9f\n" % (f2i(reverb.p_filter_low), reverb.p_filter_low)
 			self.out += "%%define REVERB_DAMPEN_HIGH  0x%08X ; %.9f\n" % (f2i(reverb.p_dampen_high), reverb.p_dampen_high)
