@@ -8,7 +8,7 @@ use std::ops::{Index};
 use generate::{SoundGenerator, SoundParameters};
 
 
-const TOTAL_SEMITONES: f32 = 120 as f32;
+const TOTAL_SEMITONES: f32 = 120f32;
 const NOISESIZE: usize = 64;
 
 const NAMES: &'static [&'static str] = &[
@@ -130,7 +130,7 @@ impl SoundParameters for OidosSoundParameters {
 			f_slopehigh: (1.0 - p["fslopehigh"]).powi(3),
 			f_sweephigh: (p["fsweephigh"] - 0.5).powi(3) * TOTAL_SEMITONES * 100.0 / sample_rate,
 
-			gain:        (4096 as f32).powf(p["gain"] - 0.25),
+			gain:        4096f32.powf(p["gain"] - 0.25),
 
 			base_freq:   440.0 * 2f32.powf(-57.0 / 12.0) / sample_rate * 2.0 * f32::consts::PI
 		}
@@ -252,7 +252,7 @@ impl SoundGenerator for OidosSoundGenerator {
 	}
 
 	fn produce_sample(&mut self) -> f32 {
-		let s = self.oscillator_step();
+		let s = self.oscillator_step() / (self.n_partials as f64).sqrt();
 		self.softclip(s) as f32
 	}
 }
