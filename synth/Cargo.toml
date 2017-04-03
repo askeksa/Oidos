@@ -6,6 +6,7 @@ authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
 [dependencies]
 vst2 = { path = "../../rust-vst2" }
 #vst2 = { git = "https://github.com/overdrivenpotato/rust-vst2.git" }
+rand = "0.3"
 
 [lib]
 name = "Oidos"
