@@ -63,7 +63,7 @@ pub trait SoundParameters {
 
 pub trait SoundGenerator {
 	type Parameters: PartialEq + SoundParameters;
-	type Output: Copy + Into<Sample>;
+	type Output: Default + Copy + Into<Sample>;
 	type Global: Default;
 
 	fn new(param: &Self::Parameters, tone: u8, time: usize, global: &Self::Global) -> Self;

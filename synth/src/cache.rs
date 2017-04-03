@@ -1,15 +1,14 @@
 
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 use generate::{Sample, SoundGenerator};
 
 
-const BLOCK_SHIFT: usize = 16;
+const BLOCK_SHIFT: usize = 12;
 const BLOCK_SIZE: usize = 1 << BLOCK_SHIFT;
 const BLOCK_MASK: usize = BLOCK_SIZE - 1;
 
 struct BlockVec<T> {
-	size: usize,
 	v: Vec<Vec<T>>
 }
 
@@ -21,76 +20,85 @@ impl<T> Index<usize> for BlockVec<T> {
 	}
 }
 
+impl<T: Default + Clone> IndexMut<usize> for BlockVec<T> {
+	fn index_mut(&mut self, index: usize) -> &mut T {
+		let block = index >> BLOCK_SHIFT;
+		if self.v.len() <= block {
+			self.v.resize(block + 1, Vec::new());
+		}
+		if self.v[block].is_empty() {
+			self.v[block].resize(BLOCK_SIZE, T::default());
+		}
+		&mut self.v[block][index & BLOCK_MASK]
+	}
+}
+
 impl<T> BlockVec<T> {
 	pub fn new() -> BlockVec<T> {
 		BlockVec {
-			size: 0,
 			v: Vec::new()
 		}
 	}
 
-	pub fn push(&mut self, value: T) {
-		let i1: usize = self.size >> BLOCK_SHIFT;
-		if i1 == self.v.len() {
-			self.v.push(Vec::with_capacity(BLOCK_SIZE));
-		}
-		assert!(self.v[i1].len() == (self.size & BLOCK_MASK));
-		self.v[i1].push(value);
-		self.size += 1
-	}
-
-	pub fn len(&self) -> usize {
-		self.size
-	}
-
 	pub fn clear(&mut self) {
 		self.v.clear();
-		self.size = 0;
 	}
 }
 
 
-pub struct SoundCache<G: SoundGenerator> {
-	generator: Option<Box<G>>,
-	tone: u8,
+struct CachedGenerator<G: SoundGenerator> {
+	generator: G,
 	start_time: usize,
+	end_time: usize
+}
+
+pub struct SoundCache<G: SoundGenerator> {
+	generators: Vec<CachedGenerator<G>>,
+	tone: u8,
 	sound: BlockVec<G::Output>
 }
 
 impl<G: SoundGenerator> SoundCache<G> {
 	pub fn new(tone: u8) -> SoundCache<G> {
 		SoundCache {
-			generator: None,
+			generators: Vec::new(),
 			tone: tone,
-			start_time: 0,
 			sound: BlockVec::new()
 		}
 	}
 
 	pub fn invalidate(&mut self) {
-		self.generator = None;
+		self.generators.clear();
 		self.sound.clear();
 	}
 
 	pub fn get_sample(&mut self, time: usize, param: &G::Parameters, global: &G::Global) -> Sample {
-		let end_time = self.start_time + self.sound.len();
-
-		if self.generator.is_some() && time >= self.start_time && time < end_time {
-			// Cached
-			return self.sound[time - self.start_time].into();
+		// Find generator
+		let mut gi: usize = 0;
+		while gi < self.generators.len() && self.generators[gi].end_time < time {
+			gi += 1;
+		}
+		if gi == self.generators.len() || time < self.generators[gi].start_time {
+			self.generators.insert(gi, CachedGenerator {
+				generator: G::new(param, self.tone, time, global),
+				start_time: time,
+				end_time: time
+			});
 		}
 
-		if self.generator.is_none() || time != end_time {
-			// Re-initialize generator
-			self.generator = Some(Box::new(G::new(param, self.tone, time, global)));
-			self.start_time = time;
-			self.sound.clear();
+		// Generate next sample, if needed
+		if self.generators[gi].end_time == time {
+			self.sound[time] = self.generators[gi].generator.produce_sample();
+			self.generators[gi].end_time += 1;
+			if self.generators.len() > gi + 1 && self.generators[gi + 1].start_time == self.generators[gi].end_time {
+				// Merge generators
+				self.generators[gi + 1].start_time = self.generators[gi].start_time;
+				self.generators.remove(gi);
+			}
 		}
 
-		// Next in sequence
-		let sample = self.generator.as_mut().unwrap().produce_sample();
-		self.sound.push(sample);
-		sample.into()
+		// Return cached value
+		self.sound[time].into()
 	}
 }
 
