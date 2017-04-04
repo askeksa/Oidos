@@ -216,8 +216,8 @@ def makeParamBlock(inst, uses_panning):
 
 	return [int(modes), int(fat), int(seed), int(overtones),
 			decaydiff, decaylow, harmonicity, sharpness, width,
-			filterlow, fslopelow, filterhigh, fslopehigh, fsweep,
-			gain, inst.maxsamples, attack, release,
+			filterlow, filterhigh, fslopelow, fslopehigh, fsweep, fsweep,
+			gain, inst.maxsamples, release, attack,
 			volume] + ([pan] if uses_panning else [])
 
 
@@ -762,7 +762,7 @@ def printMusicStats(music):
 			instr = music.instrument_map[ii]
 			modes = instr.paramblock[0]
 			fat = instr.paramblock[1]
-			longest = float(instr.paramblock[15]) / SAMPLERATE
+			longest = float(instr.paramblock[16]) / SAMPLERATE
 			burden = modes * fat * len(instr.tones) * longest
 			print instr.title
 			print " Burden:     modes x fat x tones x longest = %d x %d x %d x %.3f = %.f" % (modes, fat, len(instr.tones), longest, burden)

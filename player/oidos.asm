@@ -136,14 +136,15 @@ struc params
 	p_sharpness:	resd	1
 	p_width:		resd	1
 	p_filterlow:	resd	1
-	p_fslopelow:	resd	1
 	p_filterhigh:	resd	1
+	p_fslopelow:	resd	1
 	p_fslopehigh:	resd	1
-	p_fsweep:		resd	1
+	p_fsweeplow:	resd	1
+	p_fsweephigh:	resd	1
 	p_gain:			resd	1
 	p_maxsamples:	resd	1
-	p_attack:		resd	1
 	p_release:		resd	1
+	p_attack:		resd	1
 	p_volume:		resd	1
 %ifdef USES_PANNING
 	p_panning:		resd	1
@@ -331,18 +332,18 @@ MakeInstrument:
 	; Filter value
 	fld				st0
 	fsub			dword [PARAMS]		; filterlow
-	add				PARAMS, byte 4
+	add				PARAMS, byte 8
 	fmul			dword [PARAMS]		; fslopelow
-	add				PARAMS, byte 4
 	fld1
 	faddp			st1
 	fstp			qword [ARRAY]
 	add				ARRAY, byte 8
 
+	sub				PARAMS, byte 4
+
 	fsub			dword [PARAMS]		; filterhigh
-	add				PARAMS, byte 4
+	add				PARAMS, byte 8
 	fmul			dword [PARAMS]		; fslopehigh
-	add				PARAMS, byte 4
 	fld1
 	faddp			st1
 	fstp			qword [ARRAY]
@@ -366,23 +367,18 @@ MakeInstrument:
 	mov				RANDOM, [PARAMS]	; modes
 	add				PARAMS, byte 4
 	imul			RANDOM, [PARAMS]	; fat
-	add				PARAMS, byte p_fslopehigh-p_fat
-	cvtsi2sd		xmm1, RANDOM
-	pshufd			xmm5, xmm1, 0x44
+	add				PARAMS, byte p_fslopelow-p_fat
+	cvtsi2sd		xmm5, RANDOM
 
-	cvtss2sd		xmm1, [PARAMS]		; fslopehigh
+	cvtps2pd		xmm7, [PARAMS]		; fslopelow, fslopehigh
+	add				PARAMS, byte 8
+
+	cvtps2pd		xmm4, [PARAMS]		; fsweeplow, fsweephigh
+	add				PARAMS, byte 8
+
+	cvtss2sd		xmm6, [PARAMS]		; gain
 	add				PARAMS, byte 4
-	pshufd			xmm7, xmm1, 0x44
 
-	cvtss2sd		xmm1, [PARAMS]		; fsweep
-	add				PARAMS, byte 4
-	pshufd			xmm4, xmm1, 0x44
-
-	cvtss2sd		xmm1, [PARAMS]		; gain
-	add				PARAMS, byte 4
-	pshufd			xmm6, xmm1, 0x44
-
-	cvtss2sd		xmm7, [PARAMS+(p_fslopelow-p_maxsamples)]
 	mulpd			xmm7, xmm4
 
 	mov				eax, [PARAMS]		; maxsamples
@@ -423,14 +419,14 @@ MakeInstrument:
 	loop			.decay
 
 	; Gain
-	movapd			xmm1, xmm6
-	subpd			xmm1, [BASE + c_oneone]
-	mulpd			xmm1, xmm4
-	mulpd			xmm1, xmm4
-	addpd			xmm1, xmm5
-	divpd			xmm1, xmm6
-	sqrtpd			xmm1, xmm1
-	divpd			xmm4, xmm1
+	movsd			xmm1, xmm6
+	subsd			xmm1, [BASE + c_oneone]
+	mulsd			xmm1, xmm4
+	mulsd			xmm1, xmm4
+	addsd			xmm1, xmm5
+	divsd			xmm1, xmm6
+	sqrtsd			xmm1, xmm1
+	divsd			xmm4, xmm1
 
 	unpcklpd		xmm4, xmm4
 	movapd			[SAMPLE], xmm4
@@ -516,23 +512,20 @@ MakeChannel:
 	add				PARAMS, byte 4
 
 	; Attack/release add
-	cvtss2sd		xmm1, [PARAMS]		; attack
-	add				PARAMS, byte 4
-	pshufd			xmm7, xmm1, 0x44
-	cvtss2sd		xmm7, [PARAMS]		; release
-	add				PARAMS, byte 4
+	cvtps2pd		xmm7, [PARAMS]		; release, attack
+	add				PARAMS, byte 8
 
 	; Instrument volume
-	cvtss2sd		xmm1, [PARAMS]		; volume
+	cvtss2sd		xmm5, [PARAMS]		; volume
 	add				PARAMS, byte 4
-	mulsd			xmm1, xmm0
-	pshufd			xmm5, xmm1, 0x44
+	mulsd			xmm5, xmm0
+	unpcklpd		xmm5, xmm5
 
 %ifdef USES_PANNING
 	; Instrument panning
-	cvtss2sd		xmm1, [PARAMS]		; panning
+	cvtss2sd		xmm4, [PARAMS]		; panning
 	add				PARAMS, byte 4
-	pshufd			xmm4, xmm1, 0x44
+	unpcklpd		xmm4, xmm4
 	movapd			xmm1, [BASE + c_oneone]
 	addsubpd		xmm1, xmm4
 	mulpd			xmm5, xmm1
