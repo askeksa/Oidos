@@ -51,7 +51,7 @@ elif infile.endswith(".xrni"):
 	info = zfile.getinfo("Instrument.xml")
 	x = XML.makeXML(zfile.read(info))
 	xinstrs = x.RenoiseInstrument
-	name = infile[:-5]
+	name = infile[infile.rfind('/')+1:-5]
 else:
 	print "Unknown file extension: " + infile
 	sys.exit()
