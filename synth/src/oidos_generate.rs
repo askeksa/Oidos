@@ -191,15 +191,16 @@ impl SoundGenerator for OidosSoundGenerator {
 
 	fn new(param: &OidosSoundParameters, tone: u8, time: usize, random: &OidosRandomData) -> OidosSoundGenerator {
 		let n_partials = param.modes as usize * param.fat as usize;
+		let n_partials_in_array = (n_partials + 3) & !3;
 		let mut gen = OidosSoundGenerator {
 			n_partials:   n_partials,
 
-			state_re:     Vec::with_capacity(n_partials),
-			state_im:     Vec::with_capacity(n_partials),
-			step_re:      Vec::with_capacity(n_partials),
-			step_im:      Vec::with_capacity(n_partials),
-			filter_low:   Vec::with_capacity(n_partials),
-			filter_high:  Vec::with_capacity(n_partials),
+			state_re:     Vec::with_capacity(n_partials_in_array),
+			state_im:     Vec::with_capacity(n_partials_in_array),
+			step_re:      Vec::with_capacity(n_partials_in_array),
+			step_im:      Vec::with_capacity(n_partials_in_array),
+			filter_low:   Vec::with_capacity(n_partials_in_array),
+			filter_high:  Vec::with_capacity(n_partials_in_array),
 
 			f_add_low:    (-param.f_sweeplow * param.f_slopelow) as f64,
 			f_add_high:   (param.f_sweephigh * param.f_slopehigh) as f64,
@@ -248,41 +249,30 @@ impl SoundGenerator for OidosSoundGenerator {
 			}
 		}
 
+		for _ in n_partials..n_partials_in_array {
+			gen.state_re.push(0.0);
+			gen.state_im.push(0.0);
+			gen.step_re.push(0.0);
+			gen.step_im.push(0.0);
+			gen.filter_low.push(0.0);
+			gen.filter_high.push(0.0);
+		}
+
 		gen
 	}
 
 	fn produce_sample(&mut self) -> f32 {
-		let s = self.oscillator_step() / (self.n_partials as f64).sqrt();
-		self.softclip(s) as f32
+		let s = unsafe {
+			additive_core(self.state_re.as_mut_ptr(), self.state_im.as_mut_ptr(),
+		                  self.step_re.as_ptr(), self.step_im.as_ptr(),
+		                  self.filter_low.as_mut_ptr(), self.filter_high.as_mut_ptr(),
+		                  self.f_add_low, self.f_add_high, self.n_partials)
+		};
+		(s * (self.gain / (self.n_partials as f64 + (self.gain - 1.0) * s * s)).sqrt()) as f32
 	}
 }
 
-impl OidosSoundGenerator {
-	fn oscillator_step(&mut self) -> f64 {
-		let mut s: f64 = 0.0;
-		for i in 0..self.n_partials {
-			let state_re = self.state_re[i];
-			let state_im = self.state_im[i];
-			let step_re = self.step_re[i];
-			let step_im = self.step_im[i];
-			let newstate_re = state_re * step_re - state_im * step_im;
-			let newstate_im = state_re * step_im + state_im * step_re;
-			self.state_re[i] = newstate_re;
-			self.state_im[i] = newstate_im;
-
-			let f_low = self.filter_low[i];
-			let f_high = self.filter_high[i];
-			self.filter_low[i] = f_low + self.f_add_low;
-			self.filter_high[i] = f_high + self.f_add_high;
-			let f = f_low.min(f_high).min(1.0).max(0.0);
-			s += newstate_re * f;
-		}
-
-		s
-	}
-
-	fn softclip(&self, v: f64) -> f64 {
-		v * (self.gain / (1.0 + (self.gain - 1.0) * v * v)).sqrt()
-	}
+extern "cdecl" {
+	fn additive_core(state_re: *mut f64, state_im: *mut f64, step_re: *const f64, step_im: *const f64,
+	                 filter_low: *mut f64, filter_high: *mut f64, f_add_low: f64, f_add_high: f64, n: usize) -> f64;
 }
-
