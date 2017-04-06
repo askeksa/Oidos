@@ -8,24 +8,25 @@ import math
 import base64
 import struct
 
-def newname(s):
-	return re.sub("MetaSynth", "Oidos", s)
 
-def upgradeInstrument(xi, name):
-	xip.PluginIdentifier.replaceText(newname)
-	xip.PluginDisplayName.replaceText(newname)
-	xip.PluginShortDisplayName.replaceText(newname)
+def upgradeInstrument(xi, xdevice, name):
+	def newname(s):
+		return re.sub("MetaSynth", "Oidos", s)
+
+	xdevice.PluginIdentifier.replaceText(newname)
+	xdevice.PluginDisplayName.replaceText(newname)
+	xdevice.PluginShortDisplayName.replaceText(newname)
 	if name is not None:
 		xi.Name.setData(name)
 	else:
 		xi.Name.replaceText(newname)
 
-	#pdata = base64.b64decode(xip.ParameterChunk.domlist[0].childNodes[0].data + "=")
+	#pdata = base64.b64decode(xdevice.ParameterChunk.domlist[0].childNodes[0].data + "=")
 	#for i,c in enumerate(pdata):
 	#	print "%s%02X" % (" " if (i % 4) == 0 else "", ord(c)),
 	#print
 
-	xparams = xip.Parameters.Parameter.Value
+	xparams = xdevice.Parameters.Parameter.Value
 	params = [float(p) for p in xparams]
 
 	# Duplicate filter sweep parameter
@@ -35,7 +36,47 @@ def upgradeInstrument(xi, name):
 		xparams[i].setData(p)
 
 	pstring = struct.pack("<4I", 1,1,18,0) + struct.pack("<18f", *params)
-	xip.ParameterChunk.setData(base64.b64encode(pstring))
+	xdevice.ParameterChunk.setData(base64.b64encode(pstring))
+
+def upgradeInstruments(xinstrs, name):
+	for xi in xinstrs:
+		for xdevice in xi.PluginProperties.PluginDevice:
+			plugin_id = str(xdevice.PluginIdentifier)
+			if plugin_id == "MetaSynth":
+				upgradeInstrument(xi, xdevice, name)
+				break
+
+
+def upgradeReverb(xdevice):
+	def newname(s):
+		return re.sub("MetaEffect", "OidosReverb", s)
+
+	xdevice.PluginIdentifier.replaceText(newname)
+	xdevice.PluginDisplayName.replaceText(newname)
+	xdevice.PluginShortDisplayName.replaceText(newname)
+
+	#pdata = base64.b64decode(xdevice.ParameterChunk.domlist[0].childNodes[0].data + "=")
+	#for i,c in enumerate(pdata):
+	#	print "%s%02X" % (" " if (i % 4) == 0 else "", ord(c)),
+	#print
+
+	xparams = xdevice.Parameters.Parameter.Value
+	params = [float(p) for p in xparams]
+
+	# Reduce parameters
+	params = params[:20]
+
+	while len(xdevice.Parameters.Parameter) > 20:
+		xdevice.Parameters.removeChild(xdevice.Parameters.Parameter[20])
+
+	pstring = struct.pack("<4I", 1,1,20,0) + struct.pack("<20f", *params)
+	xdevice.ParameterChunk.setData(base64.b64encode(pstring))
+
+def upgradeReverbs(xtrack):
+	for xdevice in xtrack.FilterDevices.Devices.AudioPluginDevice:
+		plugin_id = str(xdevice.PluginIdentifier)
+		if plugin_id == "MetaEffect":
+			upgradeReverb(xdevice)
 
 
 infile = sys.argv[1]
@@ -45,23 +86,17 @@ zfile = zipfile.ZipFile(infile)
 if infile.endswith(".xrns"):
 	info = zfile.getinfo("Song.xml")
 	x = XML.makeXML(zfile.read(info))
-	xinstrs = x.RenoiseSong.Instruments.Instrument
-	name = None
+	upgradeInstruments(x.RenoiseSong.Instruments.Instrument, None)
+	upgradeReverbs(x.RenoiseSong.Tracks.SequencerTrack)
+	upgradeReverbs(x.RenoiseSong.Tracks.SequencerSendTrack)
 elif infile.endswith(".xrni"):
 	info = zfile.getinfo("Instrument.xml")
 	x = XML.makeXML(zfile.read(info))
-	xinstrs = x.RenoiseInstrument
-	name = infile[infile.rfind('/')+1:-5]
+	upgradeInstruments(x.RenoiseInstrument, infile[infile.rfind('/')+1:-5])
 else:
 	print "Unknown file extension: " + infile
 	sys.exit()
 
-for xi in xinstrs:
-	for xip in xi.PluginProperties.PluginDevice:
-		plugin_id = str(xip.PluginIdentifier)
-		if plugin_id == "MetaSynth":
-			upgradeInstrument(xi, name)
-			break
 
 
 outzip = zipfile.ZipFile(outfile, 'w')
