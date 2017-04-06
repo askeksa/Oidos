@@ -4,6 +4,8 @@
 #[macro_use]
 extern crate vst2;
 
+use std::mem::transmute;
+
 use vst2::buffer::AudioBuffer;
 use vst2::plugin::{Category, Info, Plugin};
 
@@ -42,6 +44,19 @@ fn test_random_data() {
 	assert_eq!(random.data.len(), NOISESIZE*NOISESIZE*NOISESIZE);
 	assert_eq!(*random.data.first().unwrap(), 0xCAADAA7B);
 	assert_eq!(*random.data.last().unwrap(),  0xB08A4BA7);
+}
+
+
+fn quantize(value: f32, level: f32) -> f32 {
+	let bit = 1 << ((level * 31.0).floor() as i32);
+	let mask = !bit + 1;
+	let add = bit >> 1;
+	let mut bits = unsafe { transmute::<f32, u32>(value) };
+	bits = (bits + add) & mask;
+	if bits == 0x80000000 {
+		bits = 0x00000000;
+	}
+	unsafe { transmute::<u32, f32>(bits) }
 }
 
 
@@ -86,14 +101,14 @@ impl OidosReverbParameters {
 			max_decay:  decay.powi(delaymax as i32),
 			decay_mul:  1.0 / decay,
 
-			filterlow:  values[6].powi(2),
-			filterhigh: values[7].powi(2),
-			dampenlow:  values[8].powi(2),
-			dampenhigh: values[9].powi(2),
+			filterlow:  quantize(values[6].powi(2), values[16]).min(1.0),
+			filterhigh: quantize(values[7].powi(2), values[17]).min(1.0),
+			dampenlow:  quantize(values[8].powi(2), values[18]).min(1.0),
+			dampenhigh: quantize(values[9].powi(2), values[19]).min(1.0),
 
 			volumes: [
-			            mix * (2.0 * (1.0 - values[1])).sqrt(),
-			            mix * (2.0 * values[1]).sqrt()
+			            quantize(mix * (2.0 * (1.0 - values[1])).sqrt(), values[15]),
+			            quantize(mix * (2.0 * values[1]        ).sqrt(), values[15])
 			         ]
 		}
 	}
