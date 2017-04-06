@@ -41,21 +41,25 @@ def makePanning(xpanning):
 
 
 class Instrument:
-	NAMES = ["seed","modes","fat","width",
-			 "overtones","sharpness","harmonicity","decaylow","decayhigh",
-			 "filterlow","fslopelow","filterhigh","fslopehigh","fsweep",
-			 "gain","attack","release","stereo",
-			 "dummy1", "dummy2",
+	NAMES = ["seed", "modes", "fat", "width",
+			 "overtones", "sharpness", "harmonicity", "decaylow", "decayhigh",
+			 "filterlow", "fslopelow", "fsweeplow", "filterhigh", "fslopehigh", "fsweephigh",
+			 "gain", "attack", "release",
+			 "dummy",
 			 "q_decaydiff", "q_decaylow", "q_harmonicity", "q_sharpness", "q_width",
-			 "q_f_low", "q_fs_low", "q_f_high", "q_fs_high", "q_fsweep",
+			 "q_f_low", "q_fs_low", "q_fsw_low", "q_f_high", "q_fs_high", "q_fsw_high",
 			 "q_gain", "q_attack", "q_release"
 	]
 
-	def __init__(self, number, name, params):
+	def __init__(self, number, name, params, legacy):
+		if legacy:
+			# Duplicate filter sweep parameter
+			params = params[:11] + [params[13]] + params[11:17] + [0.0] + params[20:27] + [params[29]] + params[27:33]
+
 		names = Instrument.NAMES
 		self.number = number
 		self.name = name
-		self.params = (params + [0.0] * len(names))[:len(names)]
+		self.params = params
 		for i,p in enumerate(self.params):
 			self.__dict__[names[i]] = p
 		self.volume = Volume(1.0, 1.0)
@@ -176,7 +180,8 @@ def makeParamBlock(inst, uses_panning):
 	sharpness = inst.sharpness * 5 - 4
 	width = 100 * math.pow(inst.width, 5)
 
-	fsweep = -math.pow(inst.fsweep - 0.5, 3) * 100 * TOTAL_SEMITONES / SAMPLERATE
+	fsweeplow = -math.pow(inst.fsweeplow - 0.5, 3) * 100 * TOTAL_SEMITONES / SAMPLERATE
+	fsweephigh = -math.pow(inst.fsweephigh - 0.5, 3) * 100 * TOTAL_SEMITONES / SAMPLERATE
 	fslopelow = math.pow((1 - inst.fslopelow), 3)
 	fslopehigh = -math.pow((1 - inst.fslopehigh), 3)
 	filterlow = (inst.filterlow * 2 - 1) * TOTAL_SEMITONES
@@ -193,9 +198,10 @@ def makeParamBlock(inst, uses_panning):
 	width = quantize(width, inst.q_width)
 	filterlow = quantize(filterlow, inst.q_f_low)
 	fslopelow = quantize(fslopelow, inst.q_fs_low)
+	fsweeplow = quantize(fsweeplow, inst.q_fsw_low)
 	filterhigh = quantize(filterhigh, inst.q_f_high)
 	fslopehigh = quantize(fslopehigh, inst.q_fs_high)
-	fsweep = quantize(fsweep, inst.q_fsweep)
+	fsweephigh = quantize(fsweephigh, inst.q_fsw_high)
 	gain = quantize(gain, inst.q_gain)
 	attack = quantize(attack, inst.q_attack)
 	release = quantize(release, inst.q_release)
@@ -216,7 +222,7 @@ def makeParamBlock(inst, uses_panning):
 
 	return [int(modes), int(fat), int(seed), int(overtones),
 			decaydiff, decaylow, harmonicity, sharpness, width,
-			filterlow, filterhigh, fslopelow, fslopehigh, fsweep, fsweep,
+			filterlow, filterhigh, fslopelow, fslopehigh, fsweeplow, fsweephigh,
 			gain, inst.maxsamples, release, attack,
 			volume] + ([pan] if uses_panning else [])
 
@@ -627,7 +633,8 @@ def pickupReverb(xdevices, reverb, tname, ticklength):
 		raise InputException("Track '%s' has more than one plugin device" % tname);
 
 	if isactive(xplugin):
-		if str(xplugin.PluginIdentifier) != "MetaEffect":
+		plugin_id = str(xplugin.PluginIdentifier)
+		if plugin_id not in ["MetaEffect", "OidosReverb"]:
 			raise InputException("Track '%s' has an unknown plugin device" % tname);
 
 		params = [float(x) for x in xplugin.Parameters.Parameter.Value]
@@ -648,7 +655,8 @@ def makeTracks(xsong, ticklength):
 	for ii,xinst in enumerate(xsong.Instruments.Instrument):
 		params = [float(v) for v in instplugins(xinst).PluginDevice.Parameters.Parameter.Value]
 		if params:
-			instrument = Instrument(ii, str(xinst.Name), params)
+			legacy = str(instplugins(xinst).PluginDevice.PluginIdentifier) == "MetaSynth"
+			instrument = Instrument(ii, str(xinst.Name), params, legacy)
 			instrument.volume = makeVolume(instplugins(xinst).Volume)
 			instruments.append(instrument)
 			
