@@ -134,12 +134,66 @@ impl SoundParameters for OidosSoundParameters {
 			"harmonicity" | "decaylow" | "decayhigh" => 1.0,
 			"filterhigh" => 0.8,
 			"fsweeplow" | "fsweephigh" => 0.5,
+			"-" => 0.0,
 			_ => 0.2
 		}
 	}
 
-	fn display<P: Index<&'static str, Output = f32>>(&self, name: &'static str, p: &P) -> (String, String) {
-		(format!("{}", p[name]), format!("")) // TODO
+	fn display<P: Index<&'static str, Output = f32>>(&self, name: &'static str, p: &P, sample_rate: f32) -> (String, String) {
+		let decaylow = -4096.0 / ((self.decaylow).log2() * sample_rate);
+		let decayhigh = -4096.0 / ((self.decaylow + self.decaydiff).log2() * sample_rate);
+
+		let pname = match name {
+			"q_decaydiff" => "decaydiff",
+			"q_decaylow" => "decaylow",
+			"q_harmonicity" => "harmonicity",
+			"q_sharpness" => "sharpness",
+			"q_width" => "width",
+			"q_f_low" => "filterlow",
+			"q_fs_low" => "fslopelow",
+			"q_fsw_low" => "fsweeplow",
+			"q_f_high" => "filterhigh",
+			"q_fs_high" => "fslopehigh",
+			"q_fsw_high" => "fsweephigh",
+			"q_gain" => "gain",
+			"q_attack" => "attack",
+			"q_release" => "release",
+			n => n
+		};
+
+		let value = match pname {
+			"seed" => format!("{}", self.seed),
+			"modes" => format!("{}", self.modes),
+			"fat" => format!("{}", self.fat),
+			"width" => format!("{:.3}", self.width),
+			"overtones" => format!("{:.0}", self.overtones),
+			"sharpness" => format!("{:+.1}", self.sharpness * 20.0 * 2f32.log10()),
+			"harmonicity" => format!("{:.2}", self.harmonicity),
+			"decaylow" => format!("{:.0}", 1000.0 * decaylow),
+			"decayhigh" => format!("{:.0}", 1000.0 * decayhigh),
+			"decaydiff" => format!("{:+.0}", 1000.0 * (decayhigh - decaylow)),
+			"filterlow" => format!("{:+.0}", self.f_low),
+			"fslopelow" => format!("{:.1}", 1.0 / self.f_slopelow),
+			"fsweeplow" => format!("{:+.1}", self.f_sweeplow * sample_rate),
+			"filterhigh" => format!("{:+.0}", self.f_high),
+			"fslopehigh" => format!("{:.1}", 1.0 / self.f_slopehigh),
+			"fsweephigh" => format!("{:+.1}", self.f_sweephigh * sample_rate),
+			"gain" => format!("{:.2}", self.gain),
+			"attack" => format!("{:.1}", 1000.0 / (OidosSoundParameters::attack(p, sample_rate) * sample_rate)),
+			"release" => format!("{:.2}", 1.0 / (OidosSoundParameters::release(p, sample_rate) * sample_rate)),
+			_ => "-".to_string()
+		};
+		let label = match pname {
+			"sharpness" => "dB/oct",
+			"width" | "overtones" | "filterlow" | "fslopelow" | "filterhigh" | "fslopehigh" => "ST",
+			"fsweeplow" | "fsweephigh" => "ST/s",
+			"decaylow" | "decayhigh" | "decaydiff" => "ms half",
+			"attack" => "ms",
+			"release" => "s",
+			_ => ""
+		}.to_string();
+
+		(value, label)
 	}
 
 	fn build<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> OidosSoundParameters {
