@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use std::{f32, f64};
+use std::mem::transmute;
 use std::ops::{Index};
 #[cfg(test)] use std::collections::HashMap;
 
@@ -29,7 +30,22 @@ const NAMES: &'static [&'static str] = &[
 	"fsweephigh",
 	"gain",
 	"attack",
-	"release"
+	"release",
+	"-",
+	"q_decaydiff",
+	"q_decaylow",
+	"q_harmonicity",
+	"q_sharpness",
+	"q_width",
+	"q_f_low",
+	"q_fs_low",
+	"q_fsw_low",
+	"q_f_high",
+	"q_fs_high",
+	"q_fsw_high",
+	"q_gain",
+	"q_attack",
+	"q_release"
 ];
 
 
@@ -67,6 +83,18 @@ fn test_random_data() {
 }
 
 
+fn quantize(value: f32, level: f32) -> f32 {
+	let bit = 1 << ((level * 31.0).floor() as i32);
+	let mask = !bit + 1;
+	let add = bit >> 1;
+	let mut bits = unsafe { transmute::<f32, u32>(value) };
+	bits = (bits + add) & mask;
+	if bits == 0x80000000 {
+		bits = 0x00000000;
+	}
+	unsafe { transmute::<u32, f32>(bits) }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct OidosSoundParameters {
 	modes: u8,
@@ -98,6 +126,10 @@ impl SoundParameters for OidosSoundParameters {
 	}
 
 	fn default_value(name: &str) -> f32 {
+		if name.starts_with("q_") {
+			return 0.0;
+		}
+
 		match name {
 			"harmonicity" | "decaylow" | "decayhigh" => 1.0,
 			"filterhigh" => 0.8,
@@ -111,7 +143,7 @@ impl SoundParameters for OidosSoundParameters {
 	}
 
 	fn build<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> OidosSoundParameters {
-		OidosSoundParameters {
+		let mut params = OidosSoundParameters {
 			modes:       (p["modes"]     * 100.0 + 0.5).floor().max(1.0) as u8,
 			fat:         (p["fat"]       * 100.0 + 0.5).floor().max(1.0) as u8,
 			seed:        (p["seed"]      * 100.0 + 0.5).floor() as u8,
@@ -133,25 +165,42 @@ impl SoundParameters for OidosSoundParameters {
 			gain:        4096f32.powf(p["gain"] - 0.25),
 
 			base_freq:   440.0 * 2f32.powf(-57.0 / 12.0) / sample_rate * 2.0 * f32::consts::PI
-		}
+		};
+
+		params.decaylow = quantize(params.decaylow, p["q_decaylow"]);
+		params.decaydiff = quantize(params.decaydiff, p["q_decaydiff"]);
+		params.harmonicity = quantize(params.harmonicity, p["q_harmonicity"]);
+		params.sharpness = quantize(params.sharpness, p["q_sharpness"]);
+		params.width = quantize(params.width, p["q_width"]);
+
+		params.f_low = quantize(params.f_low, p["q_f_low"]);
+		params.f_slopelow = quantize(params.f_slopelow, p["q_fs_low"]);
+		params.f_sweeplow = quantize(params.f_sweeplow, p["q_fsw_low"]);
+		params.f_high = quantize(params.f_high, p["q_f_high"]);
+		params.f_slopehigh = quantize(params.f_slopehigh, p["q_fs_high"]);
+		params.f_sweephigh = quantize(params.f_sweephigh, p["q_fsw_high"]);
+
+		params.gain = quantize(params.gain, p["q_gain"]);
+
+		params
 	}
 
 	fn attack<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> f32 {
-		let a = p["attack"];
-		if a == 0.0 {
+		let attack = p["attack"];
+		quantize(if attack == 0.0 {
 			2.0
 		} else {
-			1.0 / (a * a * sample_rate)
-		}
+			1.0 / (attack * attack * sample_rate)
+		}, p["q_attack"])
 	}
 
 	fn release<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> f32 {
-		let r = p["release"];
-		if r == 0.0 {
+		let release = p["release"];
+		quantize(if release == 0.0 {
 			2.0
 		} else {
-			1.0 / (r * sample_rate)
-		}
+			1.0 / (release * sample_rate)
+		}, p["q_release"])
 	}
 
 }
