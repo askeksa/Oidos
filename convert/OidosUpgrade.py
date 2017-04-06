@@ -30,12 +30,12 @@ def upgradeInstrument(xi, xdevice, name):
 	params = [float(p) for p in xparams]
 
 	# Duplicate filter sweep parameter
-	params = params[:11] + [params[13]] + params[11:17]
+	params = params[:11] + [params[13]] + params[11:17] + [0.0] + params[20:27] + [params[29]] + params[27:33]
 
 	for i,p in enumerate(params):
 		xparams[i].setData(p)
 
-	pstring = struct.pack("<4I", 1,1,18,0) + struct.pack("<18f", *params)
+	pstring = struct.pack("<4I", 1, 1, len(params), 0) + struct.pack("<%df" % len(params), *params)
 	xdevice.ParameterChunk.setData(base64.b64encode(pstring))
 
 def upgradeInstruments(xinstrs, name):
@@ -69,7 +69,7 @@ def upgradeReverb(xdevice):
 	while len(xdevice.Parameters.Parameter) > 20:
 		xdevice.Parameters.removeChild(xdevice.Parameters.Parameter[20])
 
-	pstring = struct.pack("<4I", 1,1,20,0) + struct.pack("<20f", *params)
+	pstring = struct.pack("<4I", 1, 1, len(params), 0) + struct.pack("<%df" % len(params), *params)
 	xdevice.ParameterChunk.setData(base64.b64encode(pstring))
 
 def upgradeReverbs(xtrack):
