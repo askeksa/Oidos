@@ -109,7 +109,7 @@ class Note:
 		6: "F#", 7: "G-", 8: "G#", 9: "A-", 10: "A#", 11: "B-"
 	}
 
-	def __init__(self, tname, line, songpos, pat, patline, note, instr, velocity):
+	def __init__(self, tname, column, line, songpos, pat, patline, note, instr, velocity):
 		note = str(note)
 		self.line = int(line)
 		self.songpos = int(songpos)
@@ -130,7 +130,7 @@ class Note:
 			try:
 				self.velocity = 127 if str(velocity) == "" or str(velocity) == ".." else int(str(velocity), 16)
 			except ValueError:
-				print "Track '%s' uses illegal velocity value '%s' at pattern %d line %d" % (tname, str(velocity), pat, patline);
+				print "Track '%s' column %d pattern %d line %d: Illegal velocity value '%s'" % (tname, column, pat, patline, str(velocity));
 				self.velocity = 127
 
 def notename(tone):
@@ -246,21 +246,23 @@ class Track:
 				self.labelname += c
 
 		self.instr = None
+		self.latest_note = 0
 		self.max_length = 0
 
 		prev = None
 		for note in notes:
 			if prev is not None and not prev.off:
 				if prev.instr is None:
-					raise InputException("Track '%s' uses undefined instrument at pattern %d line %d" % (name, prev.pat, prev.patline));
+					raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument" % (name, column, prev.pat, prev.patline));
 				if self.instr is not None and prev.instr != self.instr:
-					raise InputException("Track '%s' has more than one instrument at pattern %d line %d" % (name, prev.pat, prev.patline))
+					raise InputException("Track '%s' column %d pattern %d line %d: More than one instrument in track" % (name, column, prev.pat, prev.patline))
 				self.instr = prev.instr
 				length = note.line - prev.line
 				if length < 0:
-					raise InputException("Track '%s' has reversed note order from %d to %d" % (name, prev.patline, note.patline))
+					raise InputException("Track '%s' column %d pattern %d: Reversed note order from %d to %d" % (name, column, prev.pat, prev.patline, note.patline))
 				if prev.tone is None:
-					raise InputException("Track '%s' has a toneless note at %d" % (name, prev.patline))
+					raise InputException("Track '%s' column %d pattern %d line %d: Toneless note" % (name, column, prev.pat, prev.patline))
+				self.latest_note = max(self.latest_note, prev.line)
 				self.max_length = max(self.max_length, length)
 				tav = (prev.tone, prev.velocity)
 				self.notemap[prev] = tav
@@ -272,7 +274,7 @@ class Track:
 			prev = note
 
 		if not prev.off:
-			 raise InputException("Track '%s' is not terminated." % name)
+			 raise InputException("Track '%s' column %d pattern %d line %d: Note not terminated (insert OFF)" % name, column, prev.pat, prev.patline)
 
 		if len(self.note_lengths) == 1:
 			for l in self.note_lengths:
@@ -327,11 +329,13 @@ class Music:
 		for instr in self.instruments:
 			velocities = set()
 			instr.columns = 0
+			instr.latest_note = 0
 			volume = None
 			for ti,track in enumerate(self.tracks):
 				if track.instr == instr.number:
 					self.track_order.append(ti)
 					instr.columns += 1
+					instr.latest_note = max(instr.latest_note, track.latest_note)
 					v = track.volume * self.master_volume
 					if volume is not None and not v == volume:
 						raise InputException("Track '%s' has different volume/panning than previous tracks with same instrument" % track.title)
@@ -353,6 +357,7 @@ class Music:
 		# Calculate longest sample
 		self.max_maxsamples = 0
 		self.max_total_samples = 0
+		self.end_of_sound = 0
 		for instr in self.instruments:
 			instr.maxtime = 0
 			tones = set()
@@ -371,8 +376,13 @@ class Music:
 
 			instr.paramblock = makeParamBlock(instr, self.uses_panning)
 
+			instr.end_of_sound = instr.latest_note * ticklength * SAMPLERATE + instr.maxsamples
+			if instr.number in with_reverb:
+				instr.end_of_sound += reverb.halftime * 10 * SAMPLERATE
+
 			self.max_maxsamples = max(self.max_maxsamples, instr.maxsamples)
 			self.max_total_samples = max(self.max_total_samples, instr.maxsamples * len(instr.tones))
+			self.end_of_sound = max(self.end_of_sound, instr.end_of_sound)
 
 		self.datainit = None
 		self.out = None
@@ -433,6 +443,7 @@ class Music:
 		self.out = ""
 
 		spt = int(self.ticklength * SAMPLERATE)
+		total_samples = max((self.length * self.ticklength) * SAMPLERATE, self.end_of_sound)
 
 		def roundup(v):
 			return (int(v) & -0x10000) + 0x10000
@@ -441,7 +452,7 @@ class Music:
 		self.out += "; Music converted from %s %s\n" % (infile, str(datetime.datetime.now())[:-7])
 		self.out += "\n"
 		self.out += "%%define MUSIC_LENGTH %d\n" % self.length
-		self.out += "%%define TOTAL_SAMPLES %d\n" % roundup((self.length * self.ticklength) * SAMPLERATE + self.max_maxsamples)
+		self.out += "%%define TOTAL_SAMPLES %d\n" % roundup(total_samples)
 		self.out += "%%define MAX_TOTAL_INSTRUMENT_SAMPLES %d\n" % roundup(self.max_total_samples)
 		self.out += "\n"
 		self.out += "%%define SAMPLES_PER_TICK %d\n" % spt
@@ -553,7 +564,7 @@ class Music:
 		return deltas
 
 
-def extractTrackNotes(xsong, tr, col):
+def extractTrackNotes(xsong, tr, column):
 	outside_pattern = 0
 	xsequence = xsong.PatternSequence.PatternSequence
 	if not xsequence:
@@ -570,7 +581,7 @@ def extractTrackNotes(xsong, tr, col):
 		xpat = xpatterns[patn]
 		nlines = int(xpat.NumberOfLines)
 		if tr in [int(xmt) for xmt in xseq.MutedTracks.MutedTrack]:
-			off = Note(tname, pattern_top, posn, patn, 0, "OFF", None, 127)
+			off = Note(tname, column, pattern_top, posn, patn, 0, "OFF", None, 127)
 			notes.append(off)
 		else:
 			xtrack = xpat.Tracks.PatternTrack[tr]
@@ -578,25 +589,25 @@ def extractTrackNotes(xsong, tr, col):
 				index = int(xline("index"))
 				if index < nlines:
 					line = pattern_top + index
-					xcol = xline.NoteColumns.NoteColumn[col]
+					xcol = xline.NoteColumns.NoteColumn[column - 1]
 					if xcol.Note and str(xcol.Note) != "---":
 						instr = str(xcol.Instrument)
 						if instr == ".." and str(xcol.Note) != "OFF":
 							if prev_instr is None:
-								raise InputException("Track '%s' pattern %d position %d: Unspecified instrument" % (tname, patn, index))
+								raise InputException("Track '%s' column %d pattern %d line %d: Unspecified instrument" % (tname, column, patn, index))
 							instr = prev_instr
 						prev_instr = instr
 
-						note = Note(tname, line, posn, patn, index, xcol.Note, instr, xcol.Volume)
+						note = Note(tname, column, line, posn, patn, index, xcol.Note, instr, xcol.Volume)
 						notes.append(note)
 
 						if (note.velocity == 0 or note.velocity > 127) and not note.off:
-							raise InputException("Track '%s' pattern %d position %d: Illegal velocity value" % (tname, patn, index))
+							raise InputException("Track '%s' column %d pattern %d line %d: Illegal velocity value" % (tname, column, patn, index))
 
 					# Check for illegal uses of panning, delay and effect columns
 					def checkColumn(x, allow_zero, msg):
 						if x and not (str(x) == "" or str(x) == ".." or (allow_zero and str(x) == "00")):
-							raise InputException("Track '%s' pattern %d position %d: %s" % (tname, patn, index, msg))
+							raise InputException("Track '%s' column %d pattern %d line %d: %s" % (tname, column, patn, index, msg))
 					checkColumn(xcol.Panning, False, "Panning column used")
 					checkColumn(xcol.Delay, True, "Delay column used")
 					for xeff in xline.EffectColumns.EffectColumn.Number:
@@ -604,14 +615,13 @@ def extractTrackNotes(xsong, tr, col):
 				else:
 					outside_pattern += 1
 		pattern_top += nlines
-	notes.append(Note(tname, pattern_top, len(xsequence), len(xpatterns), 0, "OFF", 0, 127))
 
 	# Add inital OFF and remove redundant OFFs
-	if notes[0].line == 0:
+	if len(notes) > 0 and notes[0].line == 0:
 		notes2 = []
 		off = False
 	else:
-		notes2 = [Note(tname, 0, 0, int(xsequence[0].Pattern), 0, "OFF", 0, 127)]
+		notes2 = [Note(tname, column, 0, 0, int(xsequence[0].Pattern), 0, "OFF", 0, 127)]
 		off = True
 	for n in notes:
 		if n.off:
@@ -689,20 +699,20 @@ def makeTracks(xsong, ticklength):
 		volume *= makeVolume(xdevice.PostVolume.Value)
 		volume *= makePanning(xdevice.PostPanning.Value)
 
-		for col in range(0,ncols):
-			notes = extractTrackNotes(xsong, tr, col)
+		for column in range(1, ncols + 1):
+			notes = extractTrackNotes(xsong, tr, column)
 
 			track_instrs = []
 			for note in notes:
 				if not note.off:
 					instr = instruments[note.instr]
 					if instr is None:
-						raise InputException("Track '%s' uses undefined instrument (%d)" % (tname, note.instr));
+						raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument (%d)" % (tname, column, note.pat, note.patline, note.instr));
 					if note.instr not in track_instrs:
 						track_instrs.append(note.instr)
 
 			for instr in track_instrs:
-				track = Track(tr, col + 1, tname, notes, volume, instruments)
+				track = Track(tr, column, tname, notes, volume, instruments)
 				if isactive(xdevices.AudioPluginDevice):
 					reverb_tracks.append(track)
 				else:
