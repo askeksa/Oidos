@@ -126,16 +126,17 @@ impl SoundParameters for OidosSoundParameters {
 	}
 
 	fn default_value(name: &str) -> f32 {
-		if name.starts_with("q_") {
-			return 0.0;
-		}
-
 		match name {
-			"harmonicity" | "decaylow" | "decayhigh" => 1.0,
-			"filterhigh" => 0.8,
-			"fsweeplow" | "fsweephigh" => 0.5,
-			"-" => 0.0,
-			_ => 0.2
+			"filterlow" | "fslopelow" | "fslopehigh" => 0.0,
+			"fat" => 0.10,
+			"gain" | "attack" => 0.25,
+			"overtones" => 0.27,
+			"width" => 0.34,
+			"modes" => 0.40,
+			"seed" | "fsweeplow" | "fsweephigh" | "release" => 0.5,
+			"sharpness" => 0.9,
+			"harmonicity" | "decaylow" | "decayhigh" | "filterhigh" => 1.0,
+			_ => 0.0
 		}
 	}
 
