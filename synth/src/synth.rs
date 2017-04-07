@@ -45,6 +45,8 @@ pub struct MidiEvent {
 
 struct Note {
 	time: usize,
+	dead_time: usize,
+	max_dead_time: Option<usize>,
 	tone: u8,
 	velocity: u8,
 	attack: f32,
@@ -54,9 +56,11 @@ struct Note {
 }
 
 impl Note {
-	fn new(tone: u8, velocity: u8, attack: f32, release: f32) -> Note {
+	fn new(tone: u8, velocity: u8, attack: f32, release: f32, max_dead_time: Option<usize>) -> Note {
 		Note {
 			time: 0,
+			dead_time: 0,
+			max_dead_time: max_dead_time,
 			tone: tone,
 			velocity: velocity,
 			attack: attack,
@@ -67,11 +71,18 @@ impl Note {
 	}
 
 	fn produce_sample<G: SoundGenerator>(&mut self, cache: &mut Vec<SoundCache<G>>, param: &G::Parameters, global: &G::Global) -> Sample {
-		let sample = cache[self.tone as usize].get_sample(self.time, param, global);
+		let wave = cache[self.tone as usize].get_sample(self.time, param, global);
 		let amp = self.attack_amp().min(self.release_amp()) * (self.velocity as f32 / 127.0);
+		let sample = wave * amp;
 		self.time += 1;
 
-		sample * amp
+		if sample.left.abs() < 0.001 && sample.right.abs() < 0.001 {
+			self.dead_time += 1;
+		} else {
+			self.dead_time = 0;
+		}
+
+		sample
 	}
 
 	fn attack_amp(&self) -> f32 {
@@ -94,6 +105,11 @@ impl Note {
 	}
 
 	fn is_alive(&self) -> bool {
+		if let Some(max_dead_time) = self.max_dead_time {
+			if self.dead_time > max_dead_time {
+				return false;
+			}
+		}
 		self.release_amp() > 0.0
 	}
 }
@@ -265,7 +281,7 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 			MidiCommand::NoteOn { key, velocity, .. } => {
 				let attack = G::Parameters::attack(param_map, self.sample_rate);
 				let release = G::Parameters::release(param_map, self.sample_rate);
-				let note = Note::new(key, velocity, attack, release);
+				let note = Note::new(key, velocity, attack, release, Some(self.sample_rate as usize));
 				self.notes.push(note);
 			},
 			MidiCommand::NoteOff { key, velocity, .. } => {
