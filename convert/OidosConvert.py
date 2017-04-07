@@ -274,7 +274,7 @@ class Track:
 			prev = note
 
 		if not prev.off:
-			 raise InputException("Track '%s' column %d pattern %d line %d: Note not terminated (insert OFF)" % name, column, prev.pat, prev.patline)
+			 raise InputException("Track '%s' column %d pattern %d line %d: Note not terminated (insert OFF)" % (name, column, prev.pat, prev.patline))
 
 		if len(self.note_lengths) == 1:
 			for l in self.note_lengths:
