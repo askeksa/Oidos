@@ -1,12 +1,14 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
+use std::mem::transmute;
 use std::sync::RwLock;
 
 use vst2::api::Supported;
 use vst2::buffer::AudioBuffer;
 use vst2::event::Event;
-use vst2::plugin::{CanDo, Category, Info, Plugin};
+use vst2::host::Host;
+use vst2::plugin::{CanDo, Category, HostCallback, Info, Plugin};
 
 use cache::SoundCache;
 use generate::{Sample, SoundGenerator, SoundParameters};
@@ -102,6 +104,8 @@ pub trait SynthInfo {
 }
 
 pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
+	host: Option<HostCallback>,
+
 	sample_rate: f32,
 	time: usize,
 	notes: Vec<Note>,
@@ -137,6 +141,8 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 		let sample_rate = 44100.0;
 
 		SynthPlugin {
+			host: None,
+
 			sample_rate: sample_rate,
 			time: 0,
 			notes: Vec::new(),
@@ -156,6 +162,14 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 }
 
 impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
+	fn new(host: HostCallback) -> SynthPlugin<G, S> {
+		SynthPlugin {
+			host: Some(host),
+
+			.. SynthPlugin::default()
+		}
+	}
+
 	fn get_info(&self) -> Info {
 		Info {
 			presets: 0,
@@ -230,6 +244,16 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 
 	fn set_parameter(&mut self, index: i32, value: f32) {
 		self.param_values[index as usize] = value;
+
+		if let Some(ref mut host) = self.host {
+			for name in G::Parameters::influence(self.param_names[index as usize]) {
+				if let Some(p) = self.param_names.iter().position(|n| *n == name) {
+					self.param_values[p] = infinitesimal_change(self.param_values[p]).min(1.0);
+					host.automate(p as i32, self.param_values[p]);
+				}
+			}
+		}
+
 		self.build_sound_params();
 	}
 }
@@ -291,4 +315,10 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 			}
 		}
 	}
+}
+
+fn infinitesimal_change(value: f32) -> f32 {
+	let mut bits = unsafe { transmute::<f32, u32>(value) };
+	bits += 1;
+	unsafe { transmute::<u32, f32>(bits) }
 }

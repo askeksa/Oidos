@@ -196,6 +196,42 @@ impl SoundParameters for OidosSoundParameters {
 		(value, label)
 	}
 
+	fn influence(name: &'static str) -> Vec<&'static str> {
+		match name {
+			"width"         => vec!["q_width"],
+			"sharpness"     => vec!["q_sharpness"],
+			"harmonicity"   => vec!["q_harmonicity"],
+			"decaylow"      => vec!["q_decaydiff", "q_decaylow"],
+			"decayhigh"     => vec!["q_decaydiff"],
+			"filterlow"     => vec!["q_f_low"],
+			"fslopelow"     => vec!["q_fs_low"],
+			"fsweeplow"     => vec!["q_fsw_low"],
+			"filterhigh"    => vec!["q_f_high"],
+			"fslopehigh"    => vec!["q_fs_high"],
+			"fsweephigh"    => vec!["q_fsw_high"],
+			"gain"          => vec!["q_gain"],
+			"attack"        => vec!["q_attack"],
+			"release"       => vec!["q_release"],
+
+			"q_decaydiff"   => vec!["decayhigh"],
+			"q_decaylow"    => vec!["decaylow", "decayhigh", "q_decaydiff"],
+			"q_harmonicity" => vec!["harmonicity"],
+			"q_sharpness"   => vec!["sharpness"],
+			"q_width"       => vec!["width"],
+			"q_f_low"       => vec!["filterlow"],
+			"q_fs_low"      => vec!["fslopelow"],
+			"q_fsw_low"     => vec!["fsweeplow"],
+			"q_f_high"      => vec!["filterhigh"],
+			"q_fs_high"     => vec!["fslopehigh"],
+			"q_fsw_high"    => vec!["fsweephigh"],
+			"q_gain"        => vec!["gain"],
+			"q_attack"      => vec!["attack"],
+			"q_release"     => vec!["release"],
+
+			_               => vec![]
+		}
+	}
+
 	fn build<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> OidosSoundParameters {
 		let mut params = OidosSoundParameters {
 			modes:       (p["modes"]     * 100.0 + 0.5).floor().max(1.0) as u8,
