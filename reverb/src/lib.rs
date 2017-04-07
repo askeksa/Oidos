@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate vst2;
 
+use std::cmp::Ordering;
 use std::mem::transmute;
 
 use vst2::buffer::AudioBuffer;
@@ -90,7 +91,7 @@ impl OidosReverbParameters {
 		let delayadd = p100(values[4]) * 256;
 		let seed     = p100(values[11]) * 2048;
 		let mix      = values[0] * 10.0 / (nbufs as f32).sqrt();
-		let decay    = (0.5 as f32).powf(1.0 / (values[5] * sample_rate));
+		let decay    = (0.5 as f32).powf(1.0 / (values[5].max(0.01) * sample_rate));
 		OidosReverbParameters {
 			nbufs:      nbufs,
 			delaymin:   delaymin,
@@ -189,6 +190,53 @@ impl Plugin for OidosReverbPlugin {
 	fn set_parameter(&mut self, index: i32, value: f32) {
 		self.param_values[index as usize] = value;
 		self.param = OidosReverbParameters::make(&self.param_values, self.sample_rate);
+	}
+
+	fn get_parameter_text(&self, index: i32) -> String {
+		let pantext = |pan: f32| -> String {
+			match pan.partial_cmp(&0.5) {
+				Some(Ordering::Equal)   => format!("Center"),
+				Some(Ordering::Less)    => format!("{:.0} L", (0.5 - pan) * 100.0),
+				Some(Ordering::Greater) => format!("{:.0} R", (pan - 0.5) * 100.0),
+				None                    => format!("?")
+			}
+		};
+
+		let p = &self.param;
+		match index {
+			0/* mix */        => format!("{:.1}", self.param_values[0] * 10.0),
+			1/* pan */        => pantext(self.param_values[1]),
+			2/* delaymin */   => format!("{:.0}", 1000.0 * (p.delaymin as f32 / self.sample_rate)),
+			3/* delaymax */   => format!("{:.0}", 1000.0 * (p.delaymax as f32 / self.sample_rate)),
+			4/* delayadd */   => format!("{:.0}", 1000.0 * (p.delayadd as f32 / self.sample_rate)),
+			5/* halftime */   => format!("{:.2}", self.param_values[5]),
+			6/* filterlow */  => format!("{:.4}", self.param_values[6].powi(2)),
+			7/* filterhigh */ => format!("{:.4}", self.param_values[7].powi(2)),
+			8/* dampenlow */  => format!("{:.4}", self.param_values[8].powi(2)),
+			9/* dampenhigh */ => format!("{:.4}", self.param_values[9].powi(2)),
+			10/* n */         => format!("{}", p.nbufs),
+			11/* seed */      => format!("{}", p.seed / 2048),
+
+			15/* q_mixpan */  => {
+				let mix = ((p.volumes[0].powi(2) + p.volumes[1].powi(2)) / 2.0 * p.nbufs as f32).sqrt();
+				let pan = 1.0 / ((p.volumes[0] / p.volumes[1]).powi(2) + 1.0);
+				format!("{:.1} {}", mix, pantext(pan))
+			},
+			16/* q_flow */    => format!("{:.4}", p.filterlow),
+			17/* q_fhigh */   => format!("{:.4}", p.filterhigh),
+			18/* q_dlow */    => format!("{:.4}", p.dampenlow),
+			19/* q_dhigh */   => format!("{:.4}", p.dampenhigh),
+
+			_ => format!("-")
+		}
+	}
+
+	fn get_parameter_label(&self, index: i32) -> String {
+		match index {
+			2 | 3 | 4 => "ms",
+			5 => "s",
+			_ => ""
+		}.to_string()
 	}
 
 	fn process(&mut self, buffer: AudioBuffer<f32>) {
