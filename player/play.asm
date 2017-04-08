@@ -108,7 +108,8 @@ wavformat:
 	section wname rdata align=1
 
 wavname:
-	db "music.wav",0
+	incbin "wav_filename.txt"
+	db 0
 
 	section wb rdata align=1
 filemode:
