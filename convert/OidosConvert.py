@@ -87,13 +87,13 @@ class Reverb:
 		self.p_filter_high = min(1, quantize(math.pow(self.filterhigh, 2), self.q_fhigh))
 		self.p_dampen_low  = min(1, quantize(math.pow(self.dampenlow,  2), self.q_dlow))
 		self.p_dampen_high = min(1, quantize(math.pow(self.dampenhigh, 2), self.q_dhigh))
-		self.p_num_delays  = math.floor(self.n * 50 + 0.5) * 2
+		self.p_num_delays  = math.floor(self.n * 100 + 0.5) * 2
 		self.p_seed        = math.floor(self.seed * 100 + 0.5) * 2048
 		self.p_decay_mul   = math.pow(2.0, 1.0 / (self.halftime * SAMPLERATE))
 		self.p_max_decay   = math.pow(self.p_decay_mul, -self.p_max_delay)
 
 		mix = self.mix * 10 / math.sqrt(self.p_num_delays)
-		self.p_volumes       = [quantize(mix * math.sqrt(1 + s - 2 * s * self.pan), self.q_mixpan) for s in [1,-1]]
+		self.p_volumes     = [quantize(mix * math.sqrt(1 + s - 2 * s * self.pan), self.q_mixpan) for s in [1,-1]]
 
 	def __eq__(self, other):
 		return all(p1 == p2 for p1,p2 in zip(self.params, other.params))

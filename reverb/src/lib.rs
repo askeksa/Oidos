@@ -11,7 +11,7 @@ use vst2::buffer::AudioBuffer;
 use vst2::plugin::{Category, Info, Plugin};
 
 const BUFSIZE: usize = 65536;
-const NBUFS: usize = 100;
+const NBUFS: usize = 200;
 const NOISESIZE: usize = 64;
 
 pub struct OidosRandomData {
@@ -85,7 +85,7 @@ fn p100(value: f32) -> usize {
 
 impl OidosReverbParameters {
 	fn make(values: &[f32], sample_rate: f32) -> OidosReverbParameters {
-		let nbufs    = p100(values[10]);
+		let nbufs    = p100(values[10]) * 2;
 		let delaymin = p100(values[2]) * 256;
 		let delaymax = p100(values[3]) * 256;
 		let delayadd = p100(values[4]) * 256;
@@ -131,10 +131,10 @@ struct OidosReverbPlugin {
 impl Default for OidosReverbPlugin {
 	fn default() -> OidosReverbPlugin {
 		let param_values = vec![
-			0.1, 0.5, 0.05, 0.10, 0.0,
-			0.5, 0.2, 0.8, 0.2, 0.8,
-			0.5, 0.0, 0.0, 0.0, 0.0,
-			0.0, 0.0, 0.0, 0.0, 0.0
+			0.1,  0.5,  0.07, 0.13, 0.0,
+			0.5,  0.1,  0.6,  0.1,  0.7,
+			0.32, 0.32, 0.0,  0.0,  0.0,
+			0.0,  0.0,  0.0,  0.0,  0.0
 		];
 		let sample_rate = 44100.0;
 		OidosReverbPlugin {
