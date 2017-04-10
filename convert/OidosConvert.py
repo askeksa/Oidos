@@ -770,6 +770,8 @@ def makeMusic(xsong):
 
 def printMusicStats(music):
 	print "Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength)
+
+	total_burden = 0
 	ii = None
 	for ti,tn in enumerate(music.track_order):
 		if music.n_reverb_tracks > 0 and ti == 0:
@@ -788,6 +790,7 @@ def printMusicStats(music):
 			fat = instr.paramblock[1]
 			longest = float(instr.paramblock[16]) / SAMPLERATE
 			burden = modes * fat * len(instr.tones) * longest
+			total_burden += burden
 			print instr.title
 			print " Burden:     modes x fat x tones x longest = %d x %d x %d x %.3f = %.f" % (modes, fat, len(instr.tones), longest, burden)
 			tones = ""
@@ -816,6 +819,9 @@ def printMusicStats(music):
 			tnotes += " %s/%02X(%d)" % (notename(t), v, num_notes)
 		print "  Notes:    " + tnotes
 
+	seconds = int(round(total_burden / 5000))
+	print
+	print "Total burden: %.f (approximately %dm%02ds on a fast CPU)" % (total_burden, seconds / 60, seconds % 60)
 
 def writefile(filename, s):
 	f = open(filename, "wb")
