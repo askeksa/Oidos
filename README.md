@@ -1,15 +1,126 @@
 # Oidos
 
 **Oidos** is a software synthesizer, based on additive synthesis, for making
-music for very small executables, such as 4 kilobyte intros.
+music for very small executables, such as 4 and 8 kilobyte intros.
+
+**Oidos** came into being in connection with our 8k intro
+[Nexus 8](http://www.pouet.net/prod.php?which=67131)
+from **Revision 2016** - a remake of the classical **Amiga** demo
+[Nexus 7](http://www.pouet.net/prod.php?which=402).
+Its design is motivated by a desire to closely mimic the instruments from
+the original music.
+
+The synth has been further developed since then and used in several 4k and 8k
+intros. Its was first publicly released in April 2017.
+
+You can follow the devopment on GitHub: https://github.com/askeksa/Oidos
+
+
+## Using the synth
 
 The synth has two parts: a VST instrument, **Oidos**, and an accompanying VST
 effect, **OidosReverb**. The VSTs can in principle be used in any DAW, but the
 toolchain for using the music in an executable assumes that the music is
 made using **Renoise**.
 
+Each instrument uses its own **Oidos** VST instance. The **OidosReverb**
+effect VST can be added as a Track DSP to add a reverb effect to some of the
+tracks.
 
-## The synthesizer
+The synth is quite computationally heavy, especially when the *modes* and
+*fat* parameters are set to high values. The VST internally caches the sound
+produced by each tone, so as it gets "warmed up" on particular instruments,
+it gets less heavy to work with. You will sometimes hear some stuttering in
+the sound the first time a tone is played. It can be useful to disable
+"overload prevention" in the Renoise settings.
+
+To be able to convert your music into executable form, you must adhere to
+these guidelines:
+- Each track column must contain notes from only one instrument. You can use
+  each instrument in as many track columns as you like.
+- You can adjust volume and panning using Instrument Volume, Track
+  Volume/Panning, Track Post Volume/Panning, Mixer Volume/Panning and Master
+  Volume/Panning. However, all tracks using the same instrument must have the
+  same volume and panning. This is most easily accomplished by grouping all
+  columns using the same instrument as sub-columns within one track.
+- You can use Send devices, but only in "Mute Source" mode.
+- You can use per-note velocity, which will scale the volume of individual
+  notes.
+- You can not use the panning, delay or effect columns.
+- You can only use one **OidosReverb** instance. This is typically placed
+  on a Send track, with some tracks routed to it. For each instruments, either
+  all or none of the track columns using that instrument can have reverb.
+- You can use the pattern sequence matrix to selectively mute tracks at
+  certain pattern positions.
+- Globally muted tracks or track columns will not be included. Solo state is
+  ignored.
+
+
+## Converting and playing the music
+
+The `OidosConvert` program in the `convert` directory will convert a Renoise
+song using **Oidos** and **OidosReverb** into an assembly source file to be
+included with the supplied player source. See the [`oidos.h`](player/oidos.h)
+file for documentation on how to invoke the **Oidos** player.
+
+Run the converter from the commandline with input and output file names, like
+this:
+
+`OidosConvert music.xrns music.asm`
+
+Pay close attention to the output from the converter, as it will tell you if
+it encountered an error along the way (for instance if one of the guidelines
+are violated).
+
+If you are only interested in a stand-alone executable that just plays the
+music (for instance for an executable music compo), there is a complete
+setup for this in the `easy_exe` directory. It also produces a WAV writer,
+as required by many executable music compo rules.
+
+
+## Optimization
+
+An important part of the workflow when producing music for a size-limited
+executable is optimizing the size and computation time requirements of the
+music. The `OidosConvert` program outputs some statistics about the music
+which can be used to guide this process:
+
+**Burden**: The total computation time requirements of all tracks using this
+instrument. The time requirement is a product of these 4 factors:
+- The value of the *modes* parameter
+- The value of the *fat* parameter
+- The number of different tones the instrument is played with
+- The longest note played by the instrument
+
+The total burden for all instruments is printed at the end, along with an
+estimate of the real time for a reasonably fast CPU.
+
+**Tones**: Lists all the tones the instrument is played with.
+
+**Velocities**: Lists all the velocities the instrument is played with. The
+velocity values are automatically quantized to the largest power of two
+dividing all used values (with 127 treated as 128). Sticking to more "round"
+values will reduce the number of bits required to represent each note
+velocity.
+
+**Lengths**: Lists all the lengths (distance from each note until the next note
+or *OFF*) in this column, with the number in parentheses indicating how many
+times that length occurs. If all notes in a column have the same length, a
+more compact representation of the track is used, omitting all *OFF*s.
+
+**Notes**: Lists the tone/velocity combinations used in the column, with the
+number in parentheses indicating how many times that combination occurs.
+Notes are represented as indices into a list of these combinations, so
+reducing the number of combinations can reduce the size of the music.
+
+Using reverb will add around 100 bytes to the compressed size for the reverb
+code and parameters. Using panning will usually add some 10-30 bytes depending
+on the number of instruments.
+
+Also be sure to quantize all parameters, as described below.
+
+
+## Synth parameters
 
 **Oidos** is an additive synthesizer, which means it produces sound by adding
 together a large number of sine waves, known as *partials*. The frequencies
@@ -72,7 +183,8 @@ interpolating between these two values.
 ### Filter
 
 A filter is applied to the partials before summing them. The *filterlow* and
-*filterhigh* parameters specify the low and high limits of this filter.
+*filterhigh* parameters specify the low and high limits of this filter,
+relative to the base frequency of the note.
 Frequencies outside these limits are discarded or attenuated. The *fslopelow*
 and *fslopehigh* parameters specify the sizes of the sloped regions at the
 filter limits, i.e. the frequencies which are (increasingly) attenuated before
@@ -111,12 +223,10 @@ which has been quantized, at which point it will jump between the values
 allowed by the quantization.
 
 
-## The reverb
+## Reverb parameters
 
-The **OidosReverb** effect VST can be added as a Track DSP to add a reverb
-effect to some of the tracks in a piece of **Oidos** music. It is a simple,
-"strength in numbers" reverb, which simply consists of a large number of
-filtered feedback delays.
+The included reverb effect is a simple, "strength in numbers" reverb, which
+simply consists of a large number of filtered feedback delays.
 
 The parameters are:
 
@@ -150,13 +260,18 @@ Dampens the sound as it goes around the feedback delays. Frequencies below
 *dampenlow* or above *dampenhigh* will be increasingly attenuated as the
 reverb progresses.
 
+### N
+
+Number of feedback delays making up the reverb. The more delays, the smoother
+the reverb.
+
+### Seed
+
+Random seed for the random delay lengths. Some seeds cause the delays to
+interfere with each other, resulting in faint echos and irregularities in
+the reverb. Experiment with the seed to finetune the reverb.
+
 ### Quantization
 
 All parameters beginning with **q** are quantization parameters, working the
 same way as described for the synthesizer above.
-
-
-## Constraints
-
-## The toolchain
-
