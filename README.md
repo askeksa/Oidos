@@ -5,7 +5,7 @@ music for very small executables, such as 4 and 8 kilobyte intros.
 
 You can follow the devopment on [GitHub](https://github.com/askeksa/Oidos).
 For discussion, visit the
-[Pouet forum](http://www.pouet.net/search.php?what=oidos&type=prod).
+[Pouet forum](http://www.pouet.net/prod.php?which=69524).
 
 
 ## Using the synth
