@@ -202,7 +202,6 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 	fn can_do(&self, can_do: CanDo) -> Supported {
 		match can_do {
 			CanDo::ReceiveMidiEvent => Supported::Yes,
-			CanDo::Offline          => Supported::Yes,
 			_                       => Supported::No
 		}
 	}
