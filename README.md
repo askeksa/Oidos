@@ -3,17 +3,9 @@
 **Oidos** is a software synthesizer, based on additive synthesis, for making
 music for very small executables, such as 4 and 8 kilobyte intros.
 
-**Oidos** came into being in connection with our 8k intro
-[Nexus 8](http://www.pouet.net/prod.php?which=67131)
-from **Revision 2016** - a remake of the classical **Amiga** demo
-[Nexus 7](http://www.pouet.net/prod.php?which=402).
-Its design is motivated by a desire to closely mimic the instruments from
-the original music.
-
-The synth has been further developed since then and used in several 4k and 8k
-intros. Its was first publicly released in April 2017.
-
-You can follow the devopment on GitHub: https://github.com/askeksa/Oidos
+You can follow the devopment on [GitHub](https://github.com/askeksa/Oidos).
+For discussion, visit the
+[Pouet forum](http://www.pouet.net/search.php?what=oidos&type=prod).
 
 
 ## Using the synth
@@ -42,13 +34,13 @@ these guidelines:
   Volume/Panning, Track Post Volume/Panning, Mixer Volume/Panning and Master
   Volume/Panning. However, all tracks using the same instrument must have the
   same volume and panning. This is most easily accomplished by grouping all
-  columns using the same instrument as sub-columns within one track.
+  columns using the same instrument as sub-columns within the same track.
 - You can use Send devices, but only in "Mute Source" mode.
 - You can use per-note velocity, which will scale the volume of individual
   notes.
 - You can not use the panning, delay or effect columns.
 - You can only use one **OidosReverb** instance. This is typically placed
-  on a Send track, with some tracks routed to it. For each instruments, either
+  on a Send track, with some tracks routed to it. For each instrument, either
   all or none of the track columns using that instrument can have reverb.
 - You can use the pattern sequence matrix to selectively mute tracks at
   certain pattern positions.
@@ -74,8 +66,8 @@ are violated).
 
 If you are only interested in a stand-alone executable that just plays the
 music (for instance for an executable music compo), there is a complete
-setup for this in the `easy_exe` directory. It also produces a WAV writer,
-as required by many executable music compo rules.
+setup for this in the [`easy_exe`](easy_exe/) directory. It also produces a
+WAV writer, as required by many executable music compo rules.
 
 
 ## Optimization
@@ -99,19 +91,20 @@ estimate of the real time for a reasonably fast CPU.
 
 **Velocities**: Lists all the velocities the instrument is played with. The
 velocity values are automatically quantized to the largest power of two
-dividing all used values (with 127 treated as 128). Sticking to more "round"
-values will reduce the number of bits required to represent each note
+dividing all used values (with **7F** treated as **80**). Sticking to more
+"round" values will reduce the number of bits required to represent each note
 velocity.
 
 **Lengths**: Lists all the lengths (distance from each note until the next note
-or *OFF*) in this column, with the number in parentheses indicating how many
+or **OFF**) in this column, with the number in parentheses indicating how many
 times that length occurs. If all notes in a column have the same length, a
-more compact representation of the track is used, omitting all *OFF*s.
+more compact representation of the track is used, omitting all **OFF**s.
 
 **Notes**: Lists the tone/velocity combinations used in the column, with the
 number in parentheses indicating how many times that combination occurs.
 Notes are represented as indices into a list of these combinations, so
-reducing the number of combinations can reduce the size of the music.
+reducing the number of combinations will typically reduce the size of the
+music.
 
 Using reverb will add around 100 bytes to the compressed size for the reverb
 code and parameters. Using panning will usually add some 10-30 bytes depending
@@ -125,7 +118,7 @@ Also be sure to quantize all parameters, as described below.
 **Oidos** is an additive synthesizer, which means it produces sound by adding
 together a large number of sine waves, known as *partials*. The frequencies
 and amplitudes of these sine waves, along with their variation over time,
-determines the character of each sound. All of this is controlled by the
+determines the character of the sound. All of this is controlled by the
 VST parameters:
 
 ### Seed
@@ -158,7 +151,7 @@ key) and this many semitones above the base frequency.
 ### Sharpness
 
 Controls how the amplitude of a mode depends on its frequency. With low
-sharpness, the amplitudes fall off rapidly, resulting in a soft sound. With
+sharpness, the amplitudes fall off strongly, resulting in a soft sound. With
 high sharpness, the amplitudes fall off less, or even rise with frequency,
 resulting in a sharp sound.
 
@@ -274,4 +267,4 @@ the reverb. Experiment with the seed to finetune the reverb.
 ### Quantization
 
 All parameters beginning with **q** are quantization parameters, working the
-same way as described for the synthesizer above.
+same way as described for the synth above.
