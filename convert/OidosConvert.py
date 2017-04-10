@@ -674,6 +674,9 @@ def makeTracks(xsong, ticklength):
 			instruments.append(None)
 
 	for tr,xtrack in enumerate(xsong.Tracks.SequencerTrack):
+		if str(xtrack.State) != "Active":
+			continue
+
 		tname = str(xtrack.Name)
 		ncols = int(xtrack.NumberOfVisibleNoteColumns)
 		xdevices = xtrack.FilterDevices.Devices
@@ -700,6 +703,9 @@ def makeTracks(xsong, ticklength):
 		volume *= makePanning(xdevice.PostPanning.Value)
 
 		for column in range(1, ncols + 1):
+			if str(xtrack.NoteColumnStates.NoteColumnState[column - 1]) != "Active":
+				continue
+
 			notes = extractTrackNotes(xsong, tr, column)
 
 			track_instrs = []
