@@ -180,7 +180,7 @@ MixingPtr:		dd	0
 
 %if NUM_TRACKS_WITH_REVERB > 0
 ReverbState:
-	dq	0,0,0,0
+	dq	0.0,0.0,0.0,0.0
 %endif
 
 section offset rdata align=4
