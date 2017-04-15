@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIST=dist/Oidos
-rm -rf dist
+rm -rf dist/Oidos
 
 # Build synth
 cd synth
