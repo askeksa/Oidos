@@ -5,7 +5,11 @@
 %define PSIZE 4
 %define STACK_OFFSET (4*4 + 4)
 %else
+%ifidn __OUTPUT_FORMAT__, win64
 %define NAME additive_core
+%else
+%define NAME _additive_core
+%endif
 %define r(n) r%+n
 %define PSIZE 8
 %define STACK_OFFSET (4*8 + 2*16 + 8)
@@ -13,7 +17,13 @@
 
 global NAME
 
+%ifidn __OUTPUT_FORMAT__, win32
 section sec text align=1
+%elifidn __OUTPUT_FORMAT__, win64
+section sec text align=1
+%else
+section .text align=1
+%endif
 NAME:
 	; Disable denormals
 	push			r(ax)
