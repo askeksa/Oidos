@@ -13,4 +13,4 @@ nasm-rs = { git = "https://github.com/askeksa/nasm-rs" }
 
 [lib]
 name = "Oidos"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]

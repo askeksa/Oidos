@@ -8,4 +8,4 @@ vst2 = { git = "https://github.com/askeksa/rust-vst2" }
 
 [lib]
 name = "OidosReverb"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
