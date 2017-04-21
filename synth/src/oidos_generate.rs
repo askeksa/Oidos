@@ -1,6 +1,4 @@
 
-#![allow(dead_code)]
-
 use std::{f32, f64};
 use std::mem::transmute;
 use std::ops::{Index};
@@ -420,6 +418,28 @@ impl SoundGenerator for OidosSoundGenerator {
 			}
 		};
 		(s * (self.gain / (self.n_partials as f64 + (self.gain - 1.0) * s * s)).sqrt()) as f32
+	}
+}
+
+impl OidosSoundGenerator {
+	/// Functionally equivalent to the vectorized asm versions, but much slower.
+	#[allow(unused)]
+	fn additive_core(&mut self) -> f64 {
+		let mut s = 0f64;
+		for i in 0..self.n_partials {
+			let re = self.state_re[i] * self.step_re[i] - self.state_im[i] * self.step_im[i];
+			let im = self.state_re[i] * self.step_im[i] + self.state_im[i] * self.step_re[i];
+			self.state_re[i] = re;
+			self.state_im[i] = im;
+
+			let f = self.filter_low[i].min(self.filter_high[i]).min(1.0).max(0.0);
+			self.filter_low[i] += self.f_add_low;
+			self.filter_high[i] += self.f_add_high;
+
+			s += re * f;
+		}
+
+		s
 	}
 }
 
