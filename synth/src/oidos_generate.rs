@@ -321,7 +321,9 @@ pub struct OidosSoundGenerator {
 	f_add_low:   f64,
 	f_add_high:  f64,
 
-	gain:        f64
+	gain:        f64,
+
+	avx_support: bool
 }
 
 impl SoundGenerator for OidosSoundGenerator {
@@ -345,7 +347,9 @@ impl SoundGenerator for OidosSoundGenerator {
 			f_add_low:    (-param.f_sweeplow * param.f_slopelow) as f64,
 			f_add_high:   (param.f_sweephigh * param.f_slopehigh) as f64,
 
-			gain:         param.gain as f64
+			gain:         param.gain as f64,
+
+			avx_support:  unsafe { supports_avx() }
 		};
 
 		let f_lowlimit = param.f_low as f64 + tone as f64;
@@ -403,16 +407,26 @@ impl SoundGenerator for OidosSoundGenerator {
 
 	fn produce_sample(&mut self) -> f32 {
 		let s = unsafe {
-			additive_core(self.state_re.as_mut_ptr(), self.state_im.as_mut_ptr(),
-		                  self.step_re.as_ptr(), self.step_im.as_ptr(),
-		                  self.filter_low.as_mut_ptr(), self.filter_high.as_mut_ptr(),
-		                  self.f_add_low, self.f_add_high, self.n_partials)
+			if self.avx_support {
+				additive_core_avx(self.state_re.as_mut_ptr(), self.state_im.as_mut_ptr(),
+				                  self.step_re.as_ptr(), self.step_im.as_ptr(),
+				                  self.filter_low.as_mut_ptr(), self.filter_high.as_mut_ptr(),
+				                  self.f_add_low, self.f_add_high, self.n_partials)
+			} else {
+				additive_core_sse2(self.state_re.as_mut_ptr(), self.state_im.as_mut_ptr(),
+				                   self.step_re.as_ptr(), self.step_im.as_ptr(),
+				                   self.filter_low.as_mut_ptr(), self.filter_high.as_mut_ptr(),
+				                   self.f_add_low, self.f_add_high, self.n_partials)
+			}
 		};
 		(s * (self.gain / (self.n_partials as f64 + (self.gain - 1.0) * s * s)).sqrt()) as f32
 	}
 }
 
 extern "cdecl" {
-	fn additive_core(state_re: *mut f64, state_im: *mut f64, step_re: *const f64, step_im: *const f64,
-	                 filter_low: *mut f64, filter_high: *mut f64, f_add_low: f64, f_add_high: f64, n: usize) -> f64;
+	fn supports_avx() -> bool;
+	fn additive_core_sse2(state_re: *mut f64, state_im: *mut f64, step_re: *const f64, step_im: *const f64,
+	                      filter_low: *mut f64, filter_high: *mut f64, f_add_low: f64, f_add_high: f64, n: usize) -> f64;
+	fn additive_core_avx(state_re: *mut f64, state_im: *mut f64, step_re: *const f64, step_im: *const f64,
+	                     filter_low: *mut f64, filter_high: *mut f64, f_add_low: f64, f_add_high: f64, n: usize) -> f64;
 }
