@@ -1,28 +1,46 @@
 
-%if __BITS__ == 32
+; Windows?
+%ifidn __OUTPUT_FORMAT__, win32
+%define WINDOWS (1)
+%elifidn __OUTPUT_FORMAT__, win64
+%define WINDOWS (1)
+%else
+%define WINDOWS (0)
+%endif
+
+; Name mangling
+%if __BITS__ == 32 && WINDOWS
 %define NAME(n) _%+n
+%else
+%define NAME(n) n
+%endif
+
+; Registers and stack layout
+%if __BITS__ == 32
 %define r(n) e%+n
 %define PSIZE 4
 %define STACK_OFFSET (4*4 + 4)
 %else
-%define NAME(n) n
 %define r(n) r%+n
 %define PSIZE 8
 %define STACK_OFFSET (4*8 + 2*16 + 8)
 default rel
 %endif
 
+
+; Export functions
 global NAME(supports_avx)
 global NAME(additive_core_sse2)
 global NAME(additive_core_avx)
 
 
-section con rdata align=16
+; Constants
+section .rdata align=16
 c_zero:		dq	0.0, 0.0, 0.0, 0.0
 c_one:		dq	1.0, 1.0, 1.0, 1.0
 
 
-section sup text
+section .text
 NAME(supports_avx):
 	push			r(bx)
 
@@ -37,7 +55,7 @@ NAME(supports_avx):
 	ret
 
 
-section sse2 text
+section .text
 NAME(additive_core_sse2):
 	; Disable denormals
 	push			r(ax)
@@ -151,7 +169,7 @@ NAME(additive_core_sse2):
 	ret
 
 
-section avx text
+section .text
 NAME(additive_core_avx):
 	; Disable denormals
 	push			r(ax)
