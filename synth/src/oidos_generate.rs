@@ -86,7 +86,7 @@ fn quantize(value: f32, level: f32) -> f32 {
 	let mask = !bit + 1;
 	let add = bit >> 1;
 	let mut bits = unsafe { transmute::<f32, u32>(value) };
-	bits = (bits + add) & mask;
+	bits = bits.wrapping_add(add) & mask;
 	if bits == 0x80000000 {
 		bits = 0x00000000;
 	}
