@@ -261,5 +261,6 @@ NAME(additive_core_avx):
 	vhaddpd			xmm0, xmm0, xmm0
 
 	EXIT VEX
+	vzeroupper
 	ret
 
