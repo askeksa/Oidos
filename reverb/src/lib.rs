@@ -158,7 +158,7 @@ impl Plugin for OidosReverbPlugin {
 			name: "OidosReverb".to_string(),
 			vendor: "Loonies".to_string(),
 			unique_id: 0x550D10,
-			version: 2000,
+			version: 2100,
 			presets: 0,
 			parameters: 20,
 			inputs: 2,

@@ -29,7 +29,7 @@ impl SynthInfo for OidosSynthInfo {
 			name: "Oidos".to_string(),
 			vendor: "Loonies".to_string(),
 			unique_id: 0x50D10,
-			version: 2000,
+			version: 2100,
 
 			.. Info::default()
 		}
