@@ -8,13 +8,6 @@
 %define WINDOWS (0)
 %endif
 
-; Name mangling
-%if __BITS__ == 32 && WINDOWS
-%define NAME(n) _%+n
-%else
-%define NAME(n) n
-%endif
-
 ; Registers
 %if __BITS__ == 32
 %define r(n) e%+n
@@ -25,13 +18,16 @@ default rel
 
 
 ; Export functions
-global NAME(supports_avx)
-global NAME(additive_core_sse2)
-global NAME(additive_core_avx)
+global supports_avx
+global _supports_avx
+global additive_core_sse2
+global _additive_core_sse2
+global additive_core_avx
+global _additive_core_avx
 
 
 ; Constants
-section .rdata align=16
+section .rodata align=32
 c_zero:		dq	0.0, 0.0, 0.0, 0.0
 c_one:		dq	1.0, 1.0, 1.0, 1.0
 
@@ -88,8 +84,8 @@ c_one:		dq	1.0, 1.0, 1.0, 1.0
 	mov				COUNT,       [rsp + 5*8 + 0*8]
 %endif
 
+%if WINDOWS && __BITS__ == 64
 	; Save float registers
-%if __BITS__ == 64
 	sub				rsp, 2*16
 	%1(movupd)		[rsp + 0*16], xmm6
 	%1(movupd)		[rsp + 1*16], xmm7
@@ -104,12 +100,14 @@ c_one:		dq	1.0, 1.0, 1.0, 1.0
 %endmacro
 
 %macro EXIT 1
+%if WINDOWS && __BITS__ == 64
 	; Restore float registers
-%if __BITS__ == 64
 	%1(movupd)		xmm6, [rsp + 0*16]
 	%1(movupd)		xmm7, [rsp + 1*16]
 	add				rsp, 2*16
-%else
+%endif
+
+%if __BITS__ == 32
 	; Return result on FP stack
 	sub				esp, 8
 	%1(movsd)		[esp], xmm0
@@ -127,7 +125,8 @@ c_one:		dq	1.0, 1.0, 1.0, 1.0
 
 ; Supports AVX?
 section .text
-NAME(supports_avx):
+supports_avx:
+_supports_avx:
 	push			r(bx)
 
 	mov				eax, 1
@@ -143,7 +142,8 @@ NAME(supports_avx):
 
 ; SSE2 core
 section .text
-NAME(additive_core_sse2):
+additive_core_sse2:
+_additive_core_sse2:
 	ENTRY LEGACY
 
 	; Initialize
@@ -208,12 +208,15 @@ NAME(additive_core_sse2):
 
 ; AVX core
 section .text
-NAME(additive_core_avx):
+additive_core_avx:
+_additive_core_avx:
 	ENTRY VEX
 
 	; Initialize
-	vbroadcastsd	ymm6, xmm0
-	vbroadcastsd	ymm7, xmm1
+	vunpcklpd		xmm6, xmm0, xmm0
+	vinsertf128		ymm6, ymm6, xmm6, 1
+	vunpcklpd		xmm7, xmm1, xmm1
+	vinsertf128		ymm7, ymm7, xmm7, 1
 	vxorpd			ymm0, ymm0
 
 .loop:
