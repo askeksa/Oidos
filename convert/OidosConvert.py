@@ -360,16 +360,20 @@ class Music:
 		self.end_of_sound = 0
 		for instr in self.instruments:
 			instr.maxtime = 0
-			tones = set()
+			tonecount = dict()
+			velocitycount = dict()
 			for ti,track in enumerate(self.tracks):
 				if track.instr != instr.number:
 					continue
 				instr.maxtime = max(instr.maxtime, track.max_length * ticklength)
 				for note in track.notes:
 					if note.tone is not None:
-						tones.add(note.tone)
+						tonecount[note.tone] = tonecount[note.tone] + 1 if note.tone in tonecount else 1
+						velocitycount[note.velocity] = velocitycount[note.velocity] + 1 if note.velocity in velocitycount else 1
 
-			instr.tones = sorted(list(tones))
+			instr.tonecount = tonecount
+			instr.velocitycount = velocitycount
+			instr.tones = sorted(list(tonecount.keys()))
 			instr.tonemap = dict()
 			for i,t in enumerate(instr.tones):
 				instr.tonemap[t] = i
@@ -768,7 +772,32 @@ def makeMusic(xsong):
 	return Music(tracks, instruments, length, ticklength, n_reverb_tracks, reverb, master_volume)
 
 
-def printMusicStats(music):
+def printMusicStats(music, ansi):
+	def form(s):
+		f = ""
+		for c in s:
+			if c == 'T':
+				f += "\033[33m%s\033[0m" if ansi else "%s"
+			elif c == 'V':
+				f += "\033[31m%02X\033[0m" if ansi else "%02X"
+			elif c == 'L':
+				f += "\033[36m%d\033[0m" if ansi else "%d"
+			elif c == 'N':
+				f += ":%d" if ansi else ":%d"
+			elif c == 'H':
+				f += "\033[32m%s\033[0m" if ansi else "%s"
+			elif c == 'X':
+				f += "\033[34mx\033[0m" if ansi else "x"
+			elif c == 'I':
+				f += "\033[31m(%d bits)\033[0m" if ansi else "(%d bits)"
+			elif c == 'B':
+				f += "\033[35m%.f\033[0m" if ansi else "%.f"
+			elif c == 'D':
+				f += "\033[35m%dm%02ds\033[0m" if ansi else "%dm%02ds"
+			else:
+				f += c
+		return f
+
 	print "Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength)
 
 	total_burden = 0
@@ -791,23 +820,23 @@ def printMusicStats(music):
 			longest = float(instr.paramblock[16]) / SAMPLERATE
 			burden = modes * fat * len(instr.tones) * longest
 			total_burden += burden
-			print instr.title
-			print " Burden:     modes x fat x tones x longest = %d x %d x %d x %.3f = %.f" % (modes, fat, len(instr.tones), longest, burden)
+			print form("H") % instr.title
+			print " Burden:    " + form(" modes X fat X tones X longest = %d X %d X %d X %.3f = B") % (modes, fat, len(instr.tones), longest, burden)
 			tones = ""
 			for t in instr.tones:
-				tones += " " + notename(t)
+				tones += form(" TN") % (notename(t), instr.tonecount[t])
 			print " Tones:     " + tones
 			velocities = ""
 			for v in instr.velocities:
-				velocities += " %02X" % v
+				velocities += form(" VN") % (v, instr.velocitycount[v])
 			vbits = int(round(math.log(128 / instr.velocity_quantum, 2)))
-			print " Velocities:" + velocities + " (%d bits)" % vbits
+			print " Velocities:" + velocities + form(" I") % vbits
 
-		print " " + track.title
+		print form(" H") % track.title
 
 		lengths = ""
 		for l in sorted(track.note_lengths.keys()):
-			lengths += " %d(%d)" % (l, track.note_lengths[l])
+			lengths += form(" LN") % (l, track.note_lengths[l])
 		print "  Lengths:  " + lengths
 
 		tnotes = ""
@@ -816,12 +845,13 @@ def printMusicStats(music):
 			for n in [note for note in track.notes if not note.off and note.instr == track.instr]:
 				if track.notemap[n] == (t,v):
 					num_notes += 1
-			tnotes += " %s/%02X(%d)" % (notename(t), v, num_notes)
+			tnotes += form(" T/VN") % (notename(t), v, num_notes)
 		print "  Notes:    " + tnotes
 
 	seconds = int(round(total_burden / 5000))
 	print
-	print "Total burden: %.f (approximately %dm%02ds on a fast CPU)" % (total_burden, seconds / 60, seconds % 60)
+	print "Total burden: " + form("B (approximately D on a fast %s)") % (total_burden, seconds / 60, seconds % 60, "CPU")
+
 
 def writefile(filename, s):
 	f = open(filename, "wb")
@@ -829,19 +859,26 @@ def writefile(filename, s):
 	f.close()
 	print "Wrote file %s" % filename
 
+ansi = False
+files = []
+for a in sys.argv[1:]:
+	if a == "-ansi":
+		ansi = True
+	else:
+		files.append(a)
 
-if len(sys.argv) < 3:
-	print "Usage: %s <input xrns file> <output asm file>" % sys.argv[0]
+if len(files) != 2:
+	print "Usage: %s [-ansi] <input xrns file> <output asm file>" % sys.argv[0]
 	sys.exit(1)
 
-infile = sys.argv[1]
-outfile = sys.argv[2]
+infile = files[0]
+outfile = files[1]
 
 x = XML.makeXML(zipfile.ZipFile(infile).read("Song.xml"))
 try:
 	music = makeMusic(x.RenoiseSong)
 	print
-	printMusicStats(music)
+	printMusicStats(music, ansi)
 	print
 
 	writefile(outfile, music.export())
