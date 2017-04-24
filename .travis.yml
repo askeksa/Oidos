@@ -1,1 +1,5 @@
 language: rust
+
+script:
+  - cd reverb
+  - cargo build
