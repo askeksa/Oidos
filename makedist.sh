@@ -54,6 +54,7 @@ cp examples/Songs/Punqtured-4k-Fntstc.xrns $DIST/easy_exe/music.xrns
 mkdir -p $DIST/easy_exe/temp
 cp -R easy_exe/tools $DIST/easy_exe/
 
-# Copy readme and license
+# Copy readme, history and license
 cp README.md $DIST/
+cp HISTORY.md $DIST/
 cp LICENSE.md $DIST/
