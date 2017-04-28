@@ -63,6 +63,11 @@ this:
 
 `OidosConvert music.xrns music.asm`
 
+If your terminal supports *ANSI escape codes* and you want some nice colors
+for enhanced readability, use:
+
+`OidosConvert -ansi music.xrns music.asm`
+
 Pay close attention to the output from the converter, as it will tell you if
 it encountered an error along the way (for instance if one of the guidelines
 are violated).
