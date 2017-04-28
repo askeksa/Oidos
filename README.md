@@ -24,27 +24,30 @@ The synth is quite computationally heavy, especially when the *modes* and
 produced by each tone, so as it gets "warmed up" on particular instruments,
 it gets less heavy to work with. You will sometimes hear some stuttering in
 the sound the first time a tone is played. It can be useful to disable
-"overload prevention" in the Renoise settings.
+"overload prevention" in the **Renoise** settings.
 
 To be able to convert your music into executable form, you must adhere to
 these guidelines:
-- Each track column must contain notes from only one instrument. You can use
-  each instrument in as many track columns as you like.
-- You can adjust volume and panning using Instrument Volume, Track
-  Volume/Panning, Track Post Volume/Panning, Mixer Volume/Panning and Master
-  Volume/Panning. However, all tracks using the same instrument must have the
-  same volume and panning. This is most easily accomplished by grouping all
-  columns using the same instrument as sub-columns within the same track.
-- You can use Send devices, but only in "Mute Source" mode.
+- You can use as many tracks, and as many note columns within each track,
+  as you like.
+- Each note column must contain notes from only one instrument. You can use
+  each instrument in as many tracks and columns as you like.
 - You can use per-note velocity, which will scale the volume of individual
   notes.
 - You can not use the panning, delay or effect columns.
+- You can use Send devices, but only in "Mute Source" mode.
+- You can adjust volume and panning using Instrument Volume, Track
+  Volume/Panning, Mixer Volume/Panning, Send Volume/Panning and Master
+  Volume/Panning. However, all tracks using the same instrument must have the
+  same volume and panning. This is most easily accomplished by grouping all
+  notes played using the same instrument into one or more note columns within
+  the same track.
 - You can only use one **OidosReverb** instance. This is typically placed
   on a Send track, with some tracks routed to it. For each instrument, either
-  all or none of the track columns using that instrument can have reverb.
+  all or none of the note columns using that instrument can have reverb.
 - You can use the pattern sequence matrix to selectively mute tracks at
   certain pattern positions.
-- Globally muted tracks or track columns will not be included. Solo state is
+- Globally muted tracks or note columns will not be included. Solo state is
   ignored.
 
 
@@ -162,9 +165,9 @@ the base frequency, the sound is perceived as *harmonious*. Harmonious
 instruments are used for the tonal parts of music. Disharmonious instruments
 are for instance drums, which don't have a specific tone.
 
-The *harmonicity* parameter pulls the mode frequencies towards (or pushes them
-away from) overtones of the base frequency in order to make the sound more or
-less harmonious.
+The *harmonicity* parameter pulls the mode center frequencies towards (or
+pushes them away from) overtones of the base frequency in order to make the
+sound more or less harmonious.
 
 ### Decay
 
