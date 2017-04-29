@@ -95,23 +95,27 @@ instrument. The time requirement is a product of these 4 factors:
 The total burden for all instruments is printed at the end, along with an
 estimate of the real time for a reasonably fast CPU.
 
-**Tones**: Lists all the tones the instrument is played with.
+**Tones**: Lists all the tones the instrument is played with. The number
+after the colon indicates how many times in the song the instrument is played
+with that tone.
 
 **Velocities**: Lists all the velocities the instrument is played with. The
 velocity values are automatically quantized to the largest power of two
 dividing all used values (with **7F** treated as **80**). Sticking to more
 "round" values will reduce the number of bits required to represent each note
-velocity.
+velocity. The number after the colon indicates how many times in the song the
+instrument is played with that velocity.
 
 **Lengths**: Lists all the lengths (distance from each note until the next note
-or **OFF**) in this column, with the number in parentheses indicating how many
-times that length occurs. If all notes in a column have the same length, a
-more compact representation of the track is used, omitting all **OFF**s.
+or **OFF**) in this column, with the number after the colon indicating how many
+times that length occurs in the column. If all notes in a column have the same
+length, a more compact representation of the track is used, omitting all
+**OFF**s.
 
 **Notes**: Lists the tone/velocity combinations used in the column, with the
-number in parentheses indicating how many times that combination occurs.
-Notes are represented as indices into a list of these combinations, so
-reducing the number of combinations will typically reduce the size of the
+number after the colon indicating how many times that combination occurs in
+the column. Notes are represented as indices into a list of these combinations,
+so reducing the number of combinations will typically reduce the size of the
 music.
 
 Using reverb will add around 100 bytes to the compressed size for the reverb
