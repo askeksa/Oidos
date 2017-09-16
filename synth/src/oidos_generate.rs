@@ -1,6 +1,5 @@
 
 use std::{f32, f64};
-use std::mem::transmute;
 use std::ops::{Index};
 #[cfg(test)] use std::collections::HashMap;
 
@@ -85,12 +84,12 @@ fn quantize(value: f32, level: f32) -> f32 {
 	let bit = 1 << ((level * 31.0).floor() as i32);
 	let mask = !bit + 1;
 	let add = bit >> 1;
-	let mut bits = unsafe { transmute::<f32, u32>(value) };
+	let mut bits = value.to_bits();
 	bits = bits.wrapping_add(add) & mask;
 	if bits == 0x80000000 {
 		bits = 0x00000000;
 	}
-	unsafe { transmute::<u32, f32>(bits) }
+	f32::from_bits(bits)
 }
 
 #[derive(Clone, PartialEq)]

@@ -1,7 +1,6 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
-use std::mem::transmute;
 use std::sync::RwLock;
 
 use vst2::api::Supported;
@@ -333,7 +332,7 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 }
 
 fn infinitesimal_change(value: f32) -> f32 {
-	let mut bits = unsafe { transmute::<f32, u32>(value) };
+	let mut bits = value.to_bits();
 	bits += 1;
-	unsafe { transmute::<u32, f32>(bits) }
+	f32::from_bits(bits)
 }
