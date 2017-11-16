@@ -238,7 +238,7 @@ impl Plugin for OidosReverbPlugin {
 		}.to_string()
 	}
 
-	fn process(&mut self, buffer: AudioBuffer<f32>) {
+	fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
 		let (inputs, mut outputs) = buffer.split();
 		let size = inputs[0].len();
 

@@ -3,9 +3,9 @@ use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::sync::RwLock;
 
-use vst2::api::Supported;
+use vst2::api::{Events, Supported};
 use vst2::buffer::AudioBuffer;
-use vst2::event::Event;
+use vst2::event::{Event, MidiEvent};
 use vst2::host::Host;
 use vst2::plugin::{CanDo, Category, HostCallback, Info, Plugin};
 
@@ -37,7 +37,7 @@ impl MidiCommand {
 	}
 }
 
-pub struct MidiEvent {
+pub struct TimedMidiCommand {
 	time: usize,
 	command: MidiCommand,
 }
@@ -124,7 +124,7 @@ pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
 	sample_rate: f32,
 	time: usize,
 	notes: Vec<Note>,
-	events: VecDeque<MidiEvent>,
+	events: VecDeque<TimedMidiCommand>,
 	cache: RwLock<Vec<SoundCache<G>>>,
 
 	sound_params: G::Parameters,
@@ -205,11 +205,11 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 		}
 	}
 
-	fn process_events(&mut self, events: Vec<Event>) {
-		for e in events.iter() {
-			match *e {
-				Event::Midi { delta_frames, ref data, .. } => {
-					self.events.push_back(MidiEvent {
+	fn process_events(&mut self, events: &Events) {
+		for e in events.events() {
+			match e {
+				Event::Midi(MidiEvent { delta_frames, ref data, .. }) => {
+					self.events.push_back(TimedMidiCommand {
 						time: self.time + (delta_frames as usize),
 						command: MidiCommand::fromData(data)
 					});
@@ -219,7 +219,7 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 		}
 	}
 
-	fn process(&mut self, buffer: AudioBuffer<f32>) {
+	fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
 		let mut outputs = buffer.split().1;
 		for i in 0..outputs[0].len() {
 			while !self.events.is_empty() && self.events.front().unwrap().time == self.time {
@@ -273,7 +273,7 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 }
 
 impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
-	fn handle_event(&mut self, event: MidiEvent) {
+	fn handle_event(&mut self, event: TimedMidiCommand) {
 		let param_map: &HashMap<&'static str, f32> = &self.param_map.read().unwrap();
 		match event.command {
 			MidiCommand::NoteOn { key, velocity, .. } => {
