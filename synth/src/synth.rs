@@ -324,7 +324,7 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 		if new_sound_params != self.sound_params {
 			let cache: &mut Vec<SoundCache<G>> = &mut self.cache.write().unwrap();
 			self.sound_params = new_sound_params;
-			for mut c in cache {
+			for c in cache {
 				c.invalidate();
 			}
 		}
