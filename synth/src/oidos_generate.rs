@@ -8,6 +8,8 @@ use generate::{SoundGenerator, SoundParameters};
 
 const TOTAL_SEMITONES: f32 = 120f32;
 const NOISESIZE: usize = 64;
+const TARGET_SAMPLE_RATE: f32 = 44100.0;
+const DECAY_TIME: f32 = 4096.0 / TARGET_SAMPLE_RATE;
 
 const NAMES: &'static [&'static str] = &[
 	"seed",
@@ -114,6 +116,7 @@ pub struct OidosSoundParameters {
 
 	gain: f32,
 
+	sample_rate: f32,
 	base_freq: f32
 }
 
@@ -137,9 +140,9 @@ impl SoundParameters for OidosSoundParameters {
 		}
 	}
 
-	fn display<P: Index<&'static str, Output = f32>>(&self, name: &'static str, p: &P, sample_rate: f32) -> (String, String) {
-		let decaylow = -4096.0 / ((self.decaylow).log2() * sample_rate);
-		let decayhigh = -4096.0 / ((self.decaylow + self.decaydiff).log2() * sample_rate);
+	fn display<P: Index<&'static str, Output = f32>>(&self, name: &'static str, p: &P) -> (String, String) {
+		let decaylow = -DECAY_TIME / (self.decaylow).log2();
+		let decayhigh = -DECAY_TIME / (self.decaylow + self.decaydiff).log2();
 
 		let pname = match name {
 			"q_decaydiff" => "decaydiff",
@@ -172,13 +175,13 @@ impl SoundParameters for OidosSoundParameters {
 			"decaydiff" => format!("{:+.0}", 1000.0 * (decayhigh - decaylow)),
 			"filterlow" => format!("{:+.0}", self.f_low),
 			"fslopelow" => format!("{:.1}", 1.0 / self.f_slopelow),
-			"fsweeplow" => format!("{:+.1}", self.f_sweeplow * sample_rate),
+			"fsweeplow" => format!("{:+.1}", self.f_sweeplow),
 			"filterhigh" => format!("{:+.0}", self.f_high),
 			"fslopehigh" => format!("{:.1}", 1.0 / self.f_slopehigh),
-			"fsweephigh" => format!("{:+.1}", self.f_sweephigh * sample_rate),
+			"fsweephigh" => format!("{:+.1}", self.f_sweephigh),
 			"gain" => format!("{:.2}", self.gain),
-			"attack" => format!("{:.1}", 1000.0 / (OidosSoundParameters::attack(p, sample_rate) * sample_rate)),
-			"release" => format!("{:.2}", 1.0 / (OidosSoundParameters::release(p, sample_rate) * sample_rate)),
+			"attack" => format!("{:.1}", 1000.0 / (OidosSoundParameters::attack(p, self.sample_rate) * self.sample_rate)),
+			"release" => format!("{:.2}", 1.0 / (OidosSoundParameters::release(p, self.sample_rate) * self.sample_rate)),
 			_ => "-".to_string()
 		};
 		let label = match pname {
@@ -245,13 +248,14 @@ impl SoundParameters for OidosSoundParameters {
 
 			f_low:       (p["filterlow"] * 2.0 - 1.0)    * TOTAL_SEMITONES,
 			f_slopelow:  (1.0 - p["fslopelow"]).powi(3),
-			f_sweeplow:  (p["fsweeplow"] - 0.5).powi(3)  * TOTAL_SEMITONES * 100.0 / sample_rate,
+			f_sweeplow:  (p["fsweeplow"] - 0.5).powi(3)  * TOTAL_SEMITONES * 100.0,
 			f_high:      (p["filterhigh"] * 2.0 - 1.0)   * TOTAL_SEMITONES,
 			f_slopehigh: (1.0 - p["fslopehigh"]).powi(3),
-			f_sweephigh: (p["fsweephigh"] - 0.5).powi(3) * TOTAL_SEMITONES * 100.0 / sample_rate,
+			f_sweephigh: (p["fsweephigh"] - 0.5).powi(3) * TOTAL_SEMITONES * 100.0,
 
 			gain:        4096f32.powf(p["gain"] - 0.25),
 
+			sample_rate: sample_rate,
 			base_freq:   440.0 * 2f32.powf(-57.0 / 12.0) / sample_rate * 2.0 * f32::consts::PI
 		};
 
@@ -263,10 +267,10 @@ impl SoundParameters for OidosSoundParameters {
 
 		params.f_low = quantize(params.f_low, p["q_f_low"]);
 		params.f_slopelow = quantize(params.f_slopelow, p["q_fs_low"]);
-		params.f_sweeplow = quantize(params.f_sweeplow, p["q_fsw_low"]);
+		params.f_sweeplow = quantize(params.f_sweeplow / TARGET_SAMPLE_RATE, p["q_fsw_low"]) * TARGET_SAMPLE_RATE;
 		params.f_high = quantize(params.f_high, p["q_f_high"]);
 		params.f_slopehigh = quantize(params.f_slopehigh, p["q_fs_high"]);
-		params.f_sweephigh = quantize(params.f_sweephigh, p["q_fsw_high"]);
+		params.f_sweephigh = quantize(params.f_sweephigh / TARGET_SAMPLE_RATE, p["q_fsw_high"]) * TARGET_SAMPLE_RATE;
 
 		params.gain = quantize(params.gain, p["q_gain"]);
 
@@ -341,8 +345,8 @@ impl SoundGenerator for OidosSoundGenerator {
 			filter_low:   Vec::with_capacity(n_partials_in_array),
 			filter_high:  Vec::with_capacity(n_partials_in_array),
 
-			f_add_low:    (-param.f_sweeplow * param.f_slopelow) as f64,
-			f_add_high:   (param.f_sweephigh * param.f_slopehigh) as f64,
+			f_add_low:    (-param.f_sweeplow * param.f_slopelow / param.sample_rate) as f64,
+			f_add_high:   (param.f_sweephigh * param.f_slopehigh / param.sample_rate) as f64,
 
 			gain:         param.gain as f64,
 
@@ -363,7 +367,7 @@ impl SoundGenerator for OidosSoundGenerator {
 			let subtone = getrandom().abs();
 			let reltone = subtone * param.overtones as f64;
 			let decay = param.decaylow as f64 + subtone * param.decaydiff as f64;
-			let ampmul = decay.powf(1.0 / 4096.0);
+			let ampmul = decay.powf((1.0 / DECAY_TIME / param.sample_rate) as f64);
 
 			let relfreq = 2f64.powf(reltone / 12.0);
 			let relfreq_ot = (relfreq + 0.5).floor();

@@ -244,12 +244,12 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 
 	fn get_parameter_text(&self, index: i32) -> String {
 		let param_map: &HashMap<&'static str, f32> = &self.param_map.read().unwrap();
-		self.sound_params.display(self.param_names[index as usize], param_map, self.sample_rate).0
+		self.sound_params.display(self.param_names[index as usize], param_map).0
 	}
 
 	fn get_parameter_label(&self, index: i32) -> String {
 		let param_map: &HashMap<&'static str, f32> = &self.param_map.read().unwrap();
-		self.sound_params.display(self.param_names[index as usize], param_map, self.sample_rate).1
+		self.sound_params.display(self.param_names[index as usize], param_map).1
 	}
 
 	fn get_parameter(&self, index: i32) -> f32 {

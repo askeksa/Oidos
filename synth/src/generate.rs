@@ -56,7 +56,7 @@ pub trait SoundParameters {
 	fn names() -> &'static [&'static str];
 	fn default_value(name: &str) -> f32;
 	fn influence(name: &'static str) -> Vec<&'static str>;
-	fn display<P: Index<&'static str, Output = f32>>(&self, name: &'static str, p: &P, sample_rate: f32) -> (String, String);
+	fn display<P: Index<&'static str, Output = f32>>(&self, name: &'static str, p: &P) -> (String, String);
 	fn build<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> Self;
 	fn attack<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> f32;
 	fn release<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> f32;
