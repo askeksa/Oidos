@@ -3,11 +3,11 @@ use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::sync::RwLock;
 
-use vst2::api::{Events, Supported};
-use vst2::buffer::AudioBuffer;
-use vst2::event::{Event, MidiEvent};
-use vst2::host::Host;
-use vst2::plugin::{CanDo, Category, HostCallback, Info, Plugin};
+use vst::api::{Events, Supported};
+use vst::buffer::AudioBuffer;
+use vst::event::{Event, MidiEvent};
+use vst::host::Host;
+use vst::plugin::{CanDo, Category, HostCallback, Info, Plugin};
 
 use cache::SoundCache;
 use generate::{Sample, SoundGenerator, SoundParameters};

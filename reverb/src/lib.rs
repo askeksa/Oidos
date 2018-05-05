@@ -2,12 +2,12 @@
 #![allow(non_snake_case)]
 
 #[macro_use]
-extern crate vst2;
+extern crate vst;
 
 use std::cmp::Ordering;
 
-use vst2::buffer::AudioBuffer;
-use vst2::plugin::{Category, Info, Plugin};
+use vst::buffer::AudioBuffer;
+use vst::plugin::{Category, Info, Plugin};
 
 const BUFSIZE: usize = 65536;
 const NBUFS: usize = 200;

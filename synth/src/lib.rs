@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 
 #[macro_use]
-extern crate vst2;
+extern crate vst;
 extern crate rand;
 
 mod cache;
@@ -12,10 +12,10 @@ mod synth;
 
 #[cfg(test)] use rand::{thread_rng, Rng};
 
-use vst2::plugin::Info;
-#[cfg(test)] use vst2::buffer::AudioBuffer;
-#[cfg(test)] use vst2::event::Event;
-#[cfg(test)] use vst2::plugin::Plugin;
+use vst::plugin::Info;
+#[cfg(test)] use vst::buffer::AudioBuffer;
+#[cfg(test)] use vst::event::Event;
+#[cfg(test)] use vst::plugin::Plugin;
 
 use synth::{SynthInfo, SynthPlugin};
 use oidos_generate::{OidosSoundGenerator};
