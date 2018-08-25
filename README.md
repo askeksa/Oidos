@@ -45,6 +45,8 @@ these guidelines:
 - You can only use one **OidosReverb** instance. This is typically placed
   on a Send track, with some tracks routed to it. For each instrument, either
   all or none of the note columns using that instrument can have reverb.
+- You can use group tracks, but only for visual grouping. You can not use
+  volume, panning, Send devices or reverb on group tracks.
 - You can use the pattern sequence matrix to selectively mute tracks at
   certain pattern positions.
 - Globally muted tracks or note columns will not be included. Solo state is

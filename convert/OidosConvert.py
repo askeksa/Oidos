@@ -677,6 +677,20 @@ def makeTracks(xsong, ticklength):
 		else:
 			instruments.append(None)
 
+	for xgrouptrack in xsong.Tracks.SequencerGroupTrack:
+		tname = xgrouptrack.Name
+		xdevices = xgrouptrack.FilterDevices.Devices
+		for xmixer in xdevices.GroupTrackMixerDevice:
+			if isactive(xmixer):
+				if float(xmixer.Volume.Value) != 1.0 or float(xmixer.PostVolume.Value) != 1.0:
+					raise InputException("Group track '%s' has non-zero volume" % tname);
+				if float(xmixer.Panning.Value) != 0.5 or float(xmixer.PostPanning.Value) != 0.5:
+					raise InputException("Group track '%s' has non-center panning" % tname);
+		if isactive(xdevices.SendDevice):
+			raise InputException("Group track '%s' uses Send" % tname);
+		if isactive(xdevices.AudioPluginDevice):
+			raise InputException("Group track '%s' uses reverb" % tname);
+
 	for tr,xtrack in enumerate(xsong.Tracks.SequencerTrack):
 		if str(xtrack.State) != "Active":
 			continue
