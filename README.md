@@ -87,6 +87,16 @@ executable is optimizing the size and computation time requirements of the
 music. The `OidosConvert` program outputs some statistics about the music
 which can be used to guide this process:
 
+**Memory**: The memory needed to store precomputed sound for this instrument.
+For each tone an instrument is played with, the sound is precomputed at the
+length of the longest note played by the instrument. Thus, the memory
+requirement is proportional to the product of these 2 factors:
+- The number of different tones the instrument is played with
+- The longest note played by the instrument
+
+The memory for precomputed sound is reused for every instrument. The maximum
+memory used for all instruments is printed at the end.
+
 **Burden**: The total computation time requirements of all tracks using this
 instrument. The time requirement is a product of these 4 factors:
 - The value of the *modes* parameter

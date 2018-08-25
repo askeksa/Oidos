@@ -816,6 +816,8 @@ def printMusicStats(music, ansi):
 
 	print "Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength)
 
+	max_memory_mb = 0
+	max_memory_instr = None
 	total_burden = 0
 	ii = None
 	for ti,tn in enumerate(music.track_order):
@@ -834,9 +836,15 @@ def printMusicStats(music, ansi):
 			modes = instr.paramblock[0]
 			fat = instr.paramblock[1]
 			longest = float(instr.paramblock[16]) / SAMPLERATE
+			memory = len(instr.tones) * longest
+			memory_mb = memory * SAMPLERATE * 16 / 1024 / 1024
+			if memory_mb > max_memory_mb:
+				max_memory_mb = memory_mb
+				max_memory_instr = instr.title
 			burden = modes * fat * len(instr.tones) * longest
 			total_burden += burden
 			print form("H") % instr.title
+			print " Memory:    " + form(" tones X longest = %d X %.3f = B (B %s)") % (len(instr.tones), longest, memory, memory_mb, "MB")
 			print " Burden:    " + form(" modes X fat X tones X longest = %d X %d X %d X %.3f = B") % (modes, fat, len(instr.tones), longest, burden)
 			tones = ""
 			for t in instr.tones:
@@ -871,6 +879,7 @@ def printMusicStats(music, ansi):
 
 	seconds = int(round(total_burden / 5000))
 	print
+	print "Maximum instrument memory: " + form("B %s (H)") % (max_memory_mb, "MB", max_memory_instr)
 	print "Total burden: " + form("B (approximately D on a fast %s)") % (total_burden, seconds / 60, seconds % 60, "CPU")
 
 
