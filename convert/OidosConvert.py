@@ -336,10 +336,10 @@ class Music:
 					self.track_order.append(ti)
 					instr.columns += 1
 					instr.latest_note = max(instr.latest_note, track.latest_note)
-					v = track.volume * self.master_volume
-					if volume is not None and not v == volume:
+					track.volume *= self.master_volume
+					if volume is not None and not track.volume == volume:
 						raise InputException("Track '%s' has different volume/panning than previous tracks with same instrument" % track.title)
-					volume = v
+					volume = track.volume
 					for t,v in track.tavs:
 						velocities.add(v)
 			instr.volume *= volume
@@ -689,6 +689,8 @@ def makeTracks(xsong, ticklength):
 			xdevice = xdevices.TrackMixerDevice
 		volume = makeVolume(xdevice.Volume.Value)
 		volume *= makePanning(xdevice.Panning.Value)
+		volume *= makeVolume(xdevice.PostVolume.Value)
+		volume *= makePanning(xdevice.PostPanning.Value)
 		while isactive(xdevices.SendDevice):
 			if isactive(xdevices.AudioPluginDevice):
 				raise InputException("Track '%s' uses both reverb and send" % tname);
@@ -703,8 +705,8 @@ def makeTracks(xsong, ticklength):
 				xdevice = xdevices.SendTrackMixerDevice
 			volume *= makeVolume(xdevice.Volume.Value)
 			volume *= makePanning(xdevice.Panning.Value)
-		volume *= makeVolume(xdevice.PostVolume.Value)
-		volume *= makePanning(xdevice.PostPanning.Value)
+			volume *= makeVolume(xdevice.PostVolume.Value)
+			volume *= makePanning(xdevice.PostPanning.Value)
 
 		for column in range(1, ncols + 1):
 			if str(xtrack.NoteColumnStates.NoteColumnState[column - 1]) != "Active":
@@ -831,6 +833,11 @@ def printMusicStats(music, ansi):
 				velocities += form(" VN") % (v, instr.velocitycount[v])
 			vbits = int(round(math.log(128 / instr.velocity_quantum, 2)))
 			print " Velocities:" + velocities + form(" I") % vbits
+			v2 = track.volume * track.volume
+			volume = math.log((v2.left + v2.right) / 2, 10) * 10
+			panning = round(v2.right / (v2.left + v2.right) * 100) - 50
+			ptext = "Center" if panning == 0 else "%d L" % -panning if panning < 0 else "%d R" % panning
+			print " Volume:     %+.1f dB  %s" % (volume, ptext)
 
 		print form(" H") % track.title
 
