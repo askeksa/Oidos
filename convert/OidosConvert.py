@@ -278,7 +278,7 @@ class Track:
 
 		if len(self.note_lengths) == 1:
 			for l in self.note_lengths:
-				self.singular_length = l
+				self.singular_length = l if l <= 255 else None
 		else:
 			self.singular_length = None
 
