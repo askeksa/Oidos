@@ -13,8 +13,9 @@ mod synth;
 #[cfg(test)] use rand::{thread_rng, Rng};
 
 use vst::plugin::Info;
-#[cfg(test)] use vst::buffer::AudioBuffer;
-#[cfg(test)] use vst::event::Event;
+#[cfg(test)] use vst::buffer::SendEventBuffer;
+#[cfg(test)] use vst::event::{Event, MidiEvent};
+#[cfg(test)] use vst::host::HostBuffer;
 #[cfg(test)] use vst::plugin::Plugin;
 
 use synth::{SynthInfo, SynthPlugin};
@@ -57,7 +58,7 @@ fn test_oidos_plugin() {
 		let mut events = Vec::new();
 		for _e in 0..r.gen_range(0, 3) {
 			let on = r.gen_weighted_bool(3);
-			let event = Event::Midi {
+			let event = Event::Midi(MidiEvent {
 				data: [if on { 0x90u8 } else { 0x80u8 }, r.gen_range(60, 65), 127],
 				delta_frames: r.gen_range(0, block_size as i32),
 				live: true,
@@ -65,20 +66,22 @@ fn test_oidos_plugin() {
 				note_offset: None,
 				detune: 0,
 				note_off_velocity: 0
-			};
+			});
 			events.push(event);
 		}
 		events.sort_by_key(|e| {
-			if let Event::Midi { delta_frames, ..} = *e {
+			if let Event::Midi(MidiEvent { delta_frames, ..}) = *e {
 				delta_frames
 			} else {
 				0
 			}});
-		plugin.process_events(events);
+		let mut event_buffer = SendEventBuffer::new(events.len());
+		event_buffer.send_events_to_plugin(events, &mut plugin);
 
 		let mut left = vec![0f32; block_size];
 		let mut right = vec![0f32; block_size];
-		let buffer = AudioBuffer::new(vec![], vec![&mut left, &mut right]);
-		plugin.process(buffer);
+		let mut hostbuffer = HostBuffer::new(0, 2);
+		let mut buffer = hostbuffer.bind(&[&[]; 0], &mut [&mut left, &mut right]);
+		plugin.process(&mut buffer);
 	}
 }
