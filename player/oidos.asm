@@ -101,21 +101,18 @@ PartialArray:
 section sampbuf bss align=16
 SampleBuffer:
 .align24:
-	resq	MAX_TOTAL_INSTRUMENT_SAMPLES
-	resq	MAX_TOTAL_INSTRUMENT_SAMPLES
+	reso	MAX_TOTAL_INSTRUMENT_SAMPLES
 
 section mixbuf bss align=16
 MixingBuffer:
 .align24:
-	resq	TOTAL_SAMPLES
-	resq	TOTAL_SAMPLES
+	reso	TOTAL_SAMPLES
 
 %if NUM_TRACKS_WITH_REVERB > 0
 section revbuf bss align=16
 ReverbBuffer:
 .align24:
-	resq	TOTAL_SAMPLES
-	resq	TOTAL_SAMPLES
+	reso	TOTAL_SAMPLES
 
 section delbuf bss align=8
 DelayBuffer:
