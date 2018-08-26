@@ -9,7 +9,8 @@ use std::cmp::Ordering;
 use vst::buffer::AudioBuffer;
 use vst::plugin::{Category, Info, Plugin};
 
-const BUFSIZE: usize = 65536;
+const BASE_SAMPLE_RATE: f32 = 44100.0;
+const DELAY_STEP: f32 = 256f32 / BASE_SAMPLE_RATE;
 const NBUFS: usize = 200;
 const NOISESIZE: usize = 64;
 
@@ -47,6 +48,10 @@ fn test_random_data() {
 }
 
 
+fn buffer_size_for_sample_rate(sample_rate: f32) -> usize {
+	((sample_rate * DELAY_STEP * 200f32).ceil() as usize).next_power_of_two()
+}
+
 fn quantize(value: f32, level: f32) -> f32 {
 	let bit = 1 << ((level * 31.0).floor() as i32);
 	let mask = !bit + 1;
@@ -83,14 +88,14 @@ fn p100(value: f32) -> usize {
 }
 
 impl OidosReverbParameters {
-	fn make(values: &[f32], sample_rate: f32) -> OidosReverbParameters {
+	fn make(values: &[f32]) -> OidosReverbParameters {
 		let nbufs    = p100(values[10]) * 2;
 		let delaymin = p100(values[2]) * 256;
 		let delaymax = p100(values[3]) * 256;
 		let delayadd = p100(values[4]) * 256;
 		let seed     = p100(values[11]) * 2048;
 		let mix      = values[0] * 10.0 / (nbufs as f32).sqrt();
-		let decay    = (0.5 as f32).powf(1.0 / (values[5].max(0.01) * sample_rate));
+		let decay    = (0.5 as f32).powf(1.0 / (values[5].max(0.01) * BASE_SAMPLE_RATE));
 		OidosReverbParameters {
 			nbufs:      nbufs,
 			delaymin:   delaymin,
@@ -117,6 +122,7 @@ impl OidosReverbParameters {
 struct OidosReverbPlugin {
 	random: OidosRandomData,
 	sample_rate: f32,
+	buffer_size: usize,
 	param: OidosReverbParameters,
 	param_values: Vec<f32>,
 	delay_buffers: Vec<Vec<f64>>,
@@ -135,13 +141,14 @@ impl Default for OidosReverbPlugin {
 			0.32, 0.32, 0.0,  0.0,  0.0,
 			0.0,  0.0,  0.0,  0.0,  0.0
 		];
-		let sample_rate = 44100.0;
+		let buffer_size = buffer_size_for_sample_rate(BASE_SAMPLE_RATE);
 		OidosReverbPlugin {
 			random: OidosRandomData::default(),
-			sample_rate: sample_rate,
-			param: OidosReverbParameters::make(&param_values, sample_rate),
+			sample_rate: BASE_SAMPLE_RATE,
+			buffer_size: buffer_size,
+			param: OidosReverbParameters::make(&param_values),
 			param_values: param_values,
-			delay_buffers: vec![vec![0f64; BUFSIZE]; NBUFS],
+			delay_buffers: vec![vec![0f64; buffer_size]; NBUFS],
 			flstate: vec![0f64; NBUFS],
 			fhstate: vec![0f64; NBUFS],
 			dlstate: vec![0f64; NBUFS],
@@ -171,6 +178,8 @@ impl Plugin for OidosReverbPlugin {
 
 	fn set_sample_rate(&mut self, rate: f32) {
 		self.sample_rate = rate;
+		self.buffer_size = buffer_size_for_sample_rate(rate);
+		self.delay_buffers = vec![vec![0f64; self.buffer_size]; NBUFS]
 	}
 
 	fn get_parameter_name(&self, index: i32) -> String {
@@ -188,7 +197,7 @@ impl Plugin for OidosReverbPlugin {
 
 	fn set_parameter(&mut self, index: i32, value: f32) {
 		self.param_values[index as usize] = value;
-		self.param = OidosReverbParameters::make(&self.param_values, self.sample_rate);
+		self.param = OidosReverbParameters::make(&self.param_values);
 	}
 
 	fn get_parameter_text(&self, index: i32) -> String {
@@ -205,9 +214,9 @@ impl Plugin for OidosReverbPlugin {
 		match index {
 			0/* mix */        => format!("{:.1}", self.param_values[0] * 10.0),
 			1/* pan */        => pantext(self.param_values[1]),
-			2/* delaymin */   => format!("{:.0}", 1000.0 * (p.delaymin as f32 / self.sample_rate)),
-			3/* delaymax */   => format!("{:.0}", 1000.0 * (p.delaymax as f32 / self.sample_rate)),
-			4/* delayadd */   => format!("{:.0}", 1000.0 * (p.delayadd as f32 / self.sample_rate)),
+			2/* delaymin */   => format!("{:.0}", 1000.0 * (p.delaymin as f32 / BASE_SAMPLE_RATE)),
+			3/* delaymax */   => format!("{:.0}", 1000.0 * (p.delaymax as f32 / BASE_SAMPLE_RATE)),
+			4/* delayadd */   => format!("{:.0}", 1000.0 * (p.delayadd as f32 / BASE_SAMPLE_RATE)),
 			5/* halftime */   => format!("{:.2}", self.param_values[5]),
 			6/* filterlow */  => format!("{:.4}", self.param_values[6].powi(2)),
 			7/* filterhigh */ => format!("{:.4}", self.param_values[7].powi(2)),
@@ -251,28 +260,41 @@ impl Plugin for OidosReverbPlugin {
 		let p = &self.param;
 		let mut b: usize = 0;
 		let mut feedback = p.max_decay as f64;
+		let sample_rate_scale = self.sample_rate / BASE_SAMPLE_RATE;
+		let scaled_delayadd = (p.delayadd as f32 * sample_rate_scale).round() as usize;
+		// Heuristic adjustment of filter coefficients to sort of compensate for sample rate.
+		// Hits the frequency content pretty well, but still gives variation in decay time.
+		let scaled_filterlow = p.filterlow.powf(sample_rate_scale.sqrt());
+		let scaled_filterhigh = p.filterhigh.powf(sample_rate_scale.sqrt());
+		let scaled_dampenlow = p.dampenlow.powf(sample_rate_scale.sqrt());
+		let scaled_dampenhigh = p.dampenhigh.powf(sample_rate_scale.sqrt());
 		for delay in (p.delaymin+1..p.delaymax+1).rev() {
 			let random = self.random.data[p.seed + delay];
 			// Is there an echo with this delay?
 			if (random as u64 * (delay - p.delaymin) as u64) >> 32 < (p.nbufs - b) as u64 {
+				let scaled_delay = (delay as f32 * sample_rate_scale).round() as usize;
 				let c = b & 1;
 				for i in 0..size {
 					// Extract delayed signal
-					let out_index = (self.buffer_index + i - delay - p.delayadd) & (BUFSIZE - 1);
+					let out_index = (self.buffer_index + i - scaled_delay - scaled_delayadd) & (self.buffer_size - 1);
 					let out = self.delay_buffers[b][out_index];
 					outputs[c][i] += out as f32 * p.volumes[c];
 
 					// Filter input
 					let input = inputs[c][i] as f64;
-					let f_input = filter(&mut self.flstate[b], input, p.filterhigh) - filter(&mut self.fhstate[b], input, p.filterlow);
+					let f_input_low = filter(&mut self.fhstate[b], input, scaled_filterlow);
+					let f_input_high = filter(&mut self.flstate[b], input, scaled_filterhigh);
+					let f_input = f_input_high - f_input_low;
 
 					// Filter echo
-					let echo_index = (self.buffer_index + i - delay) & (BUFSIZE - 1);
+					let echo_index = (self.buffer_index + i - scaled_delay) & (self.buffer_size - 1);
 					let echo = self.delay_buffers[b][echo_index];
-					let f_echo = filter(&mut self.dlstate[b], echo, p.dampenhigh) - filter(&mut self.dhstate[b], echo, p.dampenlow);
+					let f_echo_low = filter(&mut self.dhstate[b], echo, scaled_dampenlow);
+					let f_echo_high = filter(&mut self.dlstate[b], echo, scaled_dampenhigh);
+					let f_echo = f_echo_high - f_echo_low;
 
 					// Sum input with attenuated echo
-					let in_index = (self.buffer_index + i) & (BUFSIZE - 1);
+					let in_index = (self.buffer_index + i) & (self.buffer_size - 1);
 					self.delay_buffers[b][in_index] = f_echo * feedback + f_input;
 				}
 
