@@ -125,9 +125,10 @@ pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
 	time: usize,
 	notes: Vec<Note>,
 	events: VecDeque<TimedMidiCommand>,
-	cache: RwLock<Vec<SoundCache<G>>>,
 
+	cache: Vec<SoundCache<G>>,
 	cached_sound_params: G::Parameters,
+
 	param_values: Vec<f32>,
 	params: RwLock<SynthPluginParameters<G>>,
 
@@ -172,7 +173,7 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 			time: 0,
 			notes: Vec::new(),
 			events: VecDeque::new(),
-			cache: RwLock::new(cache),
+			cache: cache,
 
 			cached_sound_params: sound_params,
 			param_values: param_values,
@@ -232,9 +233,8 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 		{
 			let params: &SynthPluginParameters<G> = &self.params.read().unwrap();
 			if params.sound_params != self.cached_sound_params {
-				let cache: &mut Vec<SoundCache<G>> = &mut self.cache.write().unwrap();
 				self.cached_sound_params = params.sound_params.clone();
-				for c in cache {
+				for c in &mut self.cache {
 					c.invalidate();
 				}
 			}
@@ -325,11 +325,10 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 	}
 
 	fn produce_sample(&mut self) -> Sample {
-		let cache: &mut Vec<SoundCache<G>> = &mut self.cache.write().unwrap();
 		let mut sample: Sample = Sample::from(0.0);
 		for i in (0..self.notes.len()).rev() {
 			if self.notes[i].is_alive() {
-				sample += self.notes[i].produce_sample(cache, &self.cached_sound_params, &self.global);
+				sample += self.notes[i].produce_sample(&mut self.cache, &self.cached_sound_params, &self.global);
 			} else {
 				self.notes.remove(i);
 			}
