@@ -119,8 +119,6 @@ pub trait SynthInfo {
 }
 
 pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
-	host: Option<HostCallback>,
-
 	sample_rate: f32,
 	time: usize,
 	notes: Vec<Note>,
@@ -129,7 +127,6 @@ pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
 	cache: Vec<SoundCache<G>>,
 	cached_sound_params: G::Parameters,
 
-	param_values: Vec<f32>,
 	params: RwLock<SynthPluginParameters<G>>,
 
 	global: G::Global,
@@ -138,6 +135,8 @@ pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
 }
 
 struct SynthPluginParameters<G: SoundGenerator> {
+	host: Option<HostCallback>,
+	values: Vec<f32>,
 	map: HashMap<&'static str, f32>,
 	sound_params: G::Parameters,
 }
@@ -162,13 +161,13 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 		let sound_params = G::Parameters::build(&param_map, sample_rate);
 
 		let params = SynthPluginParameters {
+			host: None,
+			values: param_values,
 			map: param_map,
 			sound_params: sound_params.clone()
 		};
 
 		SynthPlugin {
-			host: None,
-
 			sample_rate: sample_rate,
 			time: 0,
 			notes: Vec::new(),
@@ -176,7 +175,6 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 			cache: cache,
 
 			cached_sound_params: sound_params,
-			param_values: param_values,
 			params: RwLock::new(params),
 
 			global: G::Global::default(),
@@ -188,11 +186,10 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 
 impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 	fn new(host: HostCallback) -> SynthPlugin<G, S> {
-		SynthPlugin {
-			host: Some(host),
+		let plugin = SynthPlugin::default();
+		plugin.params.write().unwrap().host = Some(host);
 
-			.. SynthPlugin::default()
-		}
+		plugin
 	}
 
 	fn get_info(&self) -> Info {
@@ -273,17 +270,21 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 	}
 
 	fn get_parameter(&self, index: i32) -> f32 {
-		self.param_values[index as usize]
+		let params: &SynthPluginParameters<G> = &self.params.read().unwrap();
+		params.values[index as usize]
 	}
 
 	fn set_parameter(&mut self, index: i32, value: f32) {
-		self.param_values[index as usize] = value;
+		{
+			let params: &mut SynthPluginParameters<G> = &mut self.params.write().unwrap();
+			params.values[index as usize] = value;
 
-		if let Some(ref mut host) = self.host {
-			for name in G::Parameters::influence(G::Parameters::names()[index as usize]) {
-				if let Some(p) = G::Parameters::names().iter().position(|n| *n == name) {
-					self.param_values[p] = infinitesimal_change(self.param_values[p]).min(1.0);
-					host.automate(p as i32, self.param_values[p]);
+			if let Some(ref mut host) = params.host {
+				for name in G::Parameters::influence(G::Parameters::names()[index as usize]) {
+					if let Some(p) = G::Parameters::names().iter().position(|n| *n == name) {
+						params.values[p] = infinitesimal_change(params.values[p]).min(1.0);
+						host.automate(p as i32, params.values[p]);
+					}
 				}
 			}
 		}
@@ -338,7 +339,7 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 
 	fn build_sound_params(&mut self) {
 		let params: &mut SynthPluginParameters<G> = &mut self.params.write().unwrap();
-		params.map = make_param_map(G::Parameters::names(), &self.param_values);
+		params.map = make_param_map(G::Parameters::names(), &params.values);
 		params.sound_params = G::Parameters::build(&params.map, self.sample_rate);
 	}
 }
