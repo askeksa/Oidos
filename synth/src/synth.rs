@@ -127,13 +127,18 @@ pub struct SynthPlugin<G: SoundGenerator, S: SynthInfo> {
 	events: VecDeque<TimedMidiCommand>,
 	cache: RwLock<Vec<SoundCache<G>>>,
 
-	sound_params: G::Parameters,
+	cached_sound_params: G::Parameters,
 	param_values: Vec<f32>,
-	param_map: RwLock<HashMap<&'static str, f32>>,
+	params: RwLock<SynthPluginParameters<G>>,
 
 	global: G::Global,
 
 	phantom: PhantomData<S>
+}
+
+struct SynthPluginParameters<G: SoundGenerator> {
+	map: HashMap<&'static str, f32>,
+	sound_params: G::Parameters,
 }
 
 fn make_param_map(param_names: &[&'static str], param_values: &[f32]) -> HashMap<&'static str, f32> {
@@ -153,6 +158,13 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 
 		let sample_rate = 44100.0;
 
+		let sound_params = G::Parameters::build(&param_map, sample_rate);
+
+		let params = SynthPluginParameters {
+			map: param_map,
+			sound_params: sound_params.clone()
+		};
+
 		SynthPlugin {
 			host: None,
 
@@ -162,9 +174,9 @@ impl<G: SoundGenerator, S: SynthInfo> Default for SynthPlugin<G, S> {
 			events: VecDeque::new(),
 			cache: RwLock::new(cache),
 
-			sound_params: G::Parameters::build(&param_map, sample_rate),
+			cached_sound_params: sound_params,
 			param_values: param_values,
-			param_map: RwLock::new(param_map),
+			params: RwLock::new(params),
 
 			global: G::Global::default(),
 
@@ -217,6 +229,17 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 	}
 
 	fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
+		{
+			let params: &SynthPluginParameters<G> = &self.params.read().unwrap();
+			if params.sound_params != self.cached_sound_params {
+				let cache: &mut Vec<SoundCache<G>> = &mut self.cache.write().unwrap();
+				self.cached_sound_params = params.sound_params.clone();
+				for c in cache {
+					c.invalidate();
+				}
+			}
+		}
+
 		let mut outputs = buffer.split().1;
 		for i in 0..outputs[0].len() {
 			while !self.events.is_empty() && self.events.front().unwrap().time == self.time {
@@ -240,13 +263,13 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 	}
 
 	fn get_parameter_text(&self, index: i32) -> String {
-		let param_map: &HashMap<&'static str, f32> = &self.param_map.read().unwrap();
-		self.sound_params.display(G::Parameters::names()[index as usize], param_map).0
+		let params: &SynthPluginParameters<G> = &self.params.read().unwrap();
+		params.sound_params.display(G::Parameters::names()[index as usize], &params.map).0
 	}
 
 	fn get_parameter_label(&self, index: i32) -> String {
-		let param_map: &HashMap<&'static str, f32> = &self.param_map.read().unwrap();
-		self.sound_params.display(G::Parameters::names()[index as usize], param_map).1
+		let params: &SynthPluginParameters<G> = &self.params.read().unwrap();
+		params.sound_params.display(G::Parameters::names()[index as usize], &params.map).1
 	}
 
 	fn get_parameter(&self, index: i32) -> f32 {
@@ -271,11 +294,11 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 
 impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 	fn handle_event(&mut self, event: TimedMidiCommand) {
-		let param_map: &HashMap<&'static str, f32> = &self.param_map.read().unwrap();
+		let params: &SynthPluginParameters<G> = &self.params.read().unwrap();
 		match event.command {
 			MidiCommand::NoteOn { key, velocity, .. } => {
-				let attack = G::Parameters::attack(param_map, self.sample_rate);
-				let release = G::Parameters::release(param_map, self.sample_rate);
+				let attack = G::Parameters::attack(&params.map, self.sample_rate);
+				let release = G::Parameters::release(&params.map, self.sample_rate);
 				let note = Note::new(key, velocity, attack, release, Some(self.sample_rate as usize));
 				self.notes.push(note);
 			},
@@ -306,7 +329,7 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 		let mut sample: Sample = Sample::from(0.0);
 		for i in (0..self.notes.len()).rev() {
 			if self.notes[i].is_alive() {
-				sample += self.notes[i].produce_sample(cache, &self.sound_params, &self.global);
+				sample += self.notes[i].produce_sample(cache, &self.cached_sound_params, &self.global);
 			} else {
 				self.notes.remove(i);
 			}
@@ -315,16 +338,9 @@ impl<G: SoundGenerator, S: SynthInfo> SynthPlugin<G, S> {
 	}
 
 	fn build_sound_params(&mut self) {
-		let param_map: &mut HashMap<&'static str, f32> = &mut self.param_map.write().unwrap();
-		*param_map = make_param_map(G::Parameters::names(), &self.param_values);
-		let new_sound_params = G::Parameters::build(param_map, self.sample_rate);
-		if new_sound_params != self.sound_params {
-			let cache: &mut Vec<SoundCache<G>> = &mut self.cache.write().unwrap();
-			self.sound_params = new_sound_params;
-			for c in cache {
-				c.invalidate();
-			}
-		}
+		let params: &mut SynthPluginParameters<G> = &mut self.params.write().unwrap();
+		params.map = make_param_map(G::Parameters::names(), &self.param_values);
+		params.sound_params = G::Parameters::build(&params.map, self.sample_rate);
 	}
 }
 
