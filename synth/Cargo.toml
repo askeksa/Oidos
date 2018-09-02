@@ -5,7 +5,7 @@ authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
 build = "build.rs"
 
 [dependencies]
-vst = { git = "https://github.com/rust-dsp/rust-vst" }
+vst = { git = "https://github.com/askeksa/rust-vst", branch = "thread_safe_plugin" }
 rand = "0.3"
 
 [build-dependencies]
