@@ -24,7 +24,7 @@ pub enum MidiCommand {
 }
 
 impl MidiCommand {
-	fn fromData(data: &[u8; 3]) -> MidiCommand {
+	fn from_data(data: &[u8; 3]) -> MidiCommand {
 		match data[0] & 0xF0 {
 			0x80 => MidiCommand::NoteOff { channel: data[0] & 0x0F, key: data[1], velocity: data[2] },
 			0x90 => MidiCommand::NoteOn  { channel: data[0] & 0x0F, key: data[1], velocity: data[2] },
@@ -233,7 +233,7 @@ impl<G: SoundGenerator, S: SynthInfo> Plugin for SynthPlugin<G, S> {
 				Event::Midi(MidiEvent { delta_frames, ref data, .. }) => {
 					self.events.push_back(TimedMidiCommand {
 						time: self.time + (delta_frames as usize),
-						command: MidiCommand::fromData(data)
+						command: MidiCommand::from_data(data)
 					});
 				}
 				_ => {}
