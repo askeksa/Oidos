@@ -228,10 +228,11 @@ def makeParamBlock(inst, uses_panning):
 
 
 class Track:
-	def __init__(self, number, column, name, notes, volume, instruments):
+	def __init__(self, number, column, name, instr, notes, volume):
 		self.number = number
 		self.column = column
 		self.name = name
+		self.instr = instr
 		self.notes = notes
 		self.volume = volume
 		self.notemap = dict()
@@ -245,7 +246,6 @@ class Track:
 			if c.isalnum() or c == '_':
 				self.labelname += c
 
-		self.instr = None
 		self.latest_note = 0
 		self.max_length = 0
 
@@ -254,9 +254,6 @@ class Track:
 			if prev is not None and not prev.off:
 				if prev.instr is None:
 					raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument" % (name, column, prev.pat, prev.patline));
-				if self.instr is not None and prev.instr != self.instr:
-					raise InputException("Track '%s' column %d pattern %d line %d: More than one instrument in track" % (name, column, prev.pat, prev.patline))
-				self.instr = prev.instr
 				length = note.line - prev.line
 				if length < 0:
 					raise InputException("Track '%s' column %d pattern %d: Reversed note order from %d to %d" % (name, column, prev.pat, prev.patline, note.patline))
@@ -413,7 +410,7 @@ class Music:
 		for ti in self.track_order:
 			track = self.tracks[ti]
 			self.comment(track.title)
-			self.label("%s%s_%d" % (prefix, track.labelname, track.column))
+			self.label("%s%s_%d_%d" % (prefix, track.labelname, track.column, track.instr))
 			prev_n = None
 			pat_data = []
 			for n in track.notes:
@@ -525,7 +522,7 @@ class Music:
 			track = self.tracks[ti]
 			instr = self.instrument_map[track.instr]
 
-			self.label(".t_%s_%d" % (track.labelname, track.column))
+			self.label(".t_%s_%d_%d" % (track.labelname, track.column, track.instr))
 			self.comment(track.title)
 
 			# List tones and velocities
@@ -569,7 +566,6 @@ class Music:
 
 
 def extractTrackNotes(xsong, tr, column):
-	outside_pattern = 0
 	xsequence = xsong.PatternSequence.PatternSequence
 	if not xsequence:
 		xsequence = xsong.PatternSequence.SequenceEntries.SequenceEntry
@@ -605,8 +601,10 @@ def extractTrackNotes(xsong, tr, column):
 						note = Note(tname, column, line, posn, patn, index, xcol.Note, instr, xcol.Volume)
 						notes.append(note)
 
-						if (note.velocity == 0 or note.velocity > 127) and not note.off:
+						if note.velocity > 128 and not note.off:
 							raise InputException("Track '%s' column %d pattern %d line %d: Illegal velocity value" % (tname, column, patn, index))
+						if note.velocity == 0:
+							note.off = True
 
 					# Check for illegal uses of panning, delay and effect columns
 					def checkColumn(x, allow_zero, msg):
@@ -616,8 +614,6 @@ def extractTrackNotes(xsong, tr, column):
 					checkColumn(xcol.Delay, True, "Delay column used")
 					for xeff in xline.EffectColumns.EffectColumn.Number:
 						checkColumn(xeff, True, "Effect column used")
-				else:
-					outside_pattern += 1
 		pattern_top += nlines
 
 	# Add inital OFF and remove redundant OFFs
@@ -636,8 +632,19 @@ def extractTrackNotes(xsong, tr, column):
 			notes2.append(n)
 			off = False
 
-	if outside_pattern > 0:
-		print " * Track '%s': %d note%s outside patterns ignored" % (tname, outside_pattern, "s" * (outside_pattern > 1))
+	return notes2
+
+def filterTractNotes(tname, column, notes, instr):
+	notes2 = []
+	off = False
+	for n in notes:
+		if n.off or n.instr != instr:
+			if not off:
+				notes2.append(Note(tname, column, n.line, n.songpos, n.pat, n.patline, "OFF", 0, 127))
+				off = True
+		else:
+			notes2.append(n)
+			off = False
 
 	return notes2
 
@@ -738,7 +745,8 @@ def makeTracks(xsong, ticklength):
 						track_instrs.append(note.instr)
 
 			for instr in track_instrs:
-				track = Track(tr, column, tname, notes, volume, instruments)
+				instr_notes = filterTractNotes(tname, column, notes, instr)
+				track = Track(tr, column, tname, instr, instr_notes, volume)
 				if isactive(xdevices.AudioPluginDevice):
 					reverb_tracks.append(track)
 				else:
