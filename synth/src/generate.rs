@@ -63,7 +63,7 @@ pub trait SoundParameters {
 }
 
 pub trait SoundGenerator {
-	type Parameters: PartialEq + SoundParameters;
+	type Parameters: SoundParameters + PartialEq + Clone + Send + Sync;
 	type Output: Default + Copy + Into<Sample>;
 	type Global: Default;
 
