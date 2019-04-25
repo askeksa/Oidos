@@ -47,11 +47,12 @@ fn test_oidos_plugin() {
 	let mut plugin = OidosPlugin::default();
 	plugin.set_sample_rate(500.0);
 	let nump = plugin.get_info().parameters;
+	let params = plugin.get_parameter_object();
 
 	let mut r = thread_rng();
 	for _it in 0..100 {
 		for _p in 0..r.gen_range(0, 2) {
-			plugin.set_parameter(r.gen_range(0, nump), r.gen_range(0f32, 1f32));
+			params.set_parameter(r.gen_range(0, nump), r.gen_range(0f32, 1f32));
 		}
 
 		let block_size: usize = r.gen_range(100, 200);
