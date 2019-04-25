@@ -5,11 +5,11 @@ authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
 build = "build.rs"
 
 [dependencies]
-vst = { git = "https://github.com/askeksa/rust-vst", branch = "thread_safe_plugin" }
+vst = { git = "https://github.com/askeksa/rust-vst" }
 rand = "0.3"
 
 [build-dependencies]
-nasm-rs = "0.1.3"
+nasm-rs = "= 0.1.3"
 
 [lib]
 name = "Oidos"
