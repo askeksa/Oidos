@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 import xml.dom
 import xml.dom.minidom
@@ -89,3 +88,4 @@ def readXML(filename):
 
 def makeXML(xstring):
     return XML([xml.dom.minidom.parseString(xstring)])
+

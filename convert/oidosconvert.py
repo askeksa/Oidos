@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import sys
 import zipfile
-import XML
+import oidosxml
 import struct
 import ctypes
 import math
@@ -483,8 +483,8 @@ class Music:
 			self.out += "\n%define USES_PANNING\n"
 
 		# Instrument parameters
-		self.out += "\n\n\tsection iparam data align=4\n"
-		self.out += "\n_InstrumentParams:\n"
+		self.out += "\n\n\tSECT_DATA(iparam) align=4\n"
+		self.out += "\nInstrumentParams:\n"
 		for instr in self.instruments:
 			self.label(".i%02d" % instr.number)
 			self.comment(instr.title)
@@ -502,8 +502,8 @@ class Music:
 		self.out += "\n"
 
 		# Instrument tones
-		self.out += "\n\n\tsection itones data align=1\n"
-		self.out += "\n_InstrumentTones:\n"
+		self.out += "\n\n\tSECT_DATA(itones) align=1\n"
+		self.out += "\nInstrumentTones:\n"
 		for instr in self.instruments:
 			self.label(".i%02d" % instr.number)
 			self.comment(instr.title)
@@ -516,8 +516,8 @@ class Music:
 			self.out += "%d\n" % (-129 + instr.columns)
 
 		# Track data
-		self.out += "\n\n\tsection trdata data align=1\n"
-		self.out += "\n_TrackData:\n"
+		self.out += "\n\n\tSECT_DATA(trdata) align=1\n"
+		self.out += "\nTrackData:\n"
 		for ti in self.track_order:
 			track = self.tracks[ti]
 			instr = self.instrument_map[track.instr]
@@ -537,13 +537,13 @@ class Music:
 			self.dataline(tavdata)
 
 		# Lengths of notes
-		self.out += "\n\tsection notelen data align=1\n"
-		self.out += "\n_NoteLengths:\n"
+		self.out += "\n\tSECT_DATA(notelen) align=1\n"
+		self.out += "\nNoteLengths:\n"
 		self.notelist(self.lendata, [0], "L_")
 
 		# Samples for notes
-		self.out += "\n\tsection notesamp data align=1\n"
-		self.out += "\n_NoteSamples:\n"
+		self.out += "\n\tSECT_DATA(notesamp) align=1\n"
+		self.out += "\nNoteSamples:\n"
 		self.notelist(self.samdata, [], "S_")
 
 		return self.out
@@ -912,7 +912,7 @@ if len(files) != 2:
 infile = files[0]
 outfile = files[1]
 
-x = XML.makeXML(zipfile.ZipFile(infile).read("Song.xml"))
+x = oidosxml.makeXML(zipfile.ZipFile(infile).read("Song.xml"))
 try:
 	music = makeMusic(x.RenoiseSong)
 	print
