@@ -37,9 +37,11 @@ cp convert/dist/OidosConvert.exe $DIST/convert/
 
 # Copy player source
 mkdir -p $DIST/player
+cp player/dump_wav.c $DIST/player/
 cp player/oidos.asm $DIST/player/
 cp player/oidos.h $DIST/player/
 cp player/oidos.inc $DIST/player/
+cp player/platform.inc $DIST/player/
 cp player/play.asm $DIST/player/
 cp player/random.asm $DIST/player/
 
@@ -49,6 +51,7 @@ cp -R examples $DIST/
 # Copy easy_exe
 mkdir -p $DIST/easy_exe
 cp easy_exe/build.bat $DIST/easy_exe/
+cp easy_exe/build.sh $DIST/easy_exe/
 cp easy_exe/*.txt $DIST/easy_exe/
 cp examples/Songs/Punqtured-4k-Fntstc.xrns $DIST/easy_exe/music.xrns
 mkdir -p $DIST/easy_exe/temp

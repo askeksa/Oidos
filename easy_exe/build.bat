@@ -5,9 +5,10 @@ del music_wav.exe
 ..\convert\OidosConvert.exe music.xrns temp\music.asm
 
 copy ..\player\oidos.asm temp
-copy ..\player\random.asm temp
 copy ..\player\oidos.inc temp
+copy ..\player\platform.inc temp
 copy ..\player\play.asm temp
+copy ..\player\random.asm temp
 copy music.txt temp
 copy wav_filename.txt temp
 
