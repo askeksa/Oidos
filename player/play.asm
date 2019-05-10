@@ -1,4 +1,4 @@
-; Stand-alone executable for playing an Oidos song.
+; Stand-alone Windows executable for playing an Oidos song.
 
 %include "oidos.inc"
 
