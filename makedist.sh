@@ -41,6 +41,7 @@ cp player/oidos.asm $DIST/player/
 cp player/oidos.h $DIST/player/
 cp player/oidos.inc $DIST/player/
 cp player/play.asm $DIST/player/
+cp player/play.c $DIST/player/
 cp player/random.asm $DIST/player/
 
 # Copy examples
@@ -53,6 +54,14 @@ cp easy_exe/*.txt $DIST/easy_exe/
 cp examples/Songs/Punqtured-4k-Fntstc.xrns $DIST/easy_exe/music.xrns
 mkdir -p $DIST/easy_exe/temp
 cp -R easy_exe/tools $DIST/easy_exe/
+
+# Copy easy_elf
+mkdir -p $DIST/easy_elf
+cp easy_elf/build.bat $DIST/easy_elf/
+cp easy_elf/*.txt $DIST/easy_elf/
+cp examples/Songs/Punqtured-4k-Fntstc.xrns $DIST/easy_elf/music.xrns
+mkdir -p $DIST/easy_elf/temp
+cp -R easy_elf/tools $DIST/easy_elf/
 
 # Copy readme, history and license
 cp README.md $DIST/
