@@ -9,28 +9,33 @@
 ; Set to 0 if you don't care about Oidos_GenerateMusic preserving registers
 %define OIDOS_SAVE_REGISTERS 1
 
-%include "music.asm"
+%include "platform.inc"
 
+%include "music.asm"
 
 ;; ********** Definitions **********
 
-global _Oidos_GenerateMusic
-global _Oidos_StartMusic
-global _Oidos_GetPosition
+global PUBLIC_FN(Oidos_GenerateMusic)
+%ifdef WIN32
+global PUBLIC_FN(Oidos_StartMusic)
+global PUBLIC_FN(Oidos_GetPosition)
+%endif
 
-global _Oidos_MusicBuffer
-global _Oidos_TicksPerSecond
-global _Oidos_MusicLength
-global _Oidos_WavFileHeader
+global PUBLIC_FN(Oidos_MusicBuffer)
+global PUBLIC_FN(Oidos_TicksPerSecond)
+global PUBLIC_FN(Oidos_MusicLength)
+global PUBLIC_FN(Oidos_WavFileHeader)
 
 
+%ifdef WIN32
 extern __imp__waveOutOpen@24
 extern __imp__waveOutPrepareHeader@12
 extern __imp__waveOutWrite@12
 extern __imp__waveOutGetPosition@12
+%endif
 
 
-extern _Oidos_RandomData
+extern PUBLIC_FN(Oidos_RandomData)
 
 %define SAMPLE_RATE 44100
 %define BASE_FREQ 0.00232970791933 ; 440/((2^(1/12))^(9+12*4))/44100*(2*3.14159265358979)
@@ -38,21 +43,21 @@ extern _Oidos_RandomData
 
 ;; ********** Public variables **********
 
-section tps rdata align=4
-_Oidos_TicksPerSecond:
+SECT_RDATA(tps) align=4
+PUBLIC_FN(Oidos_TicksPerSecond):
 	dd TICKS_PER_SECOND
 
-section muslen rdata align=4
-_Oidos_MusicLength:
+SECT_DATA(muslen) align=4
+PUBLIC_FN(Oidos_MusicLength):
 	dd MUSIC_LENGTH
 
-section MusBuf bss align=4
-_Oidos_MusicBuffer:
-.align24
+SECT_BSS(MusBuf) align=4
+PUBLIC_FN(Oidos_MusicBuffer):
+;.align24
 	resw	TOTAL_SAMPLES*2
 
-section WavFile rdata align=4
-_Oidos_WavFileHeader:
+SECT_DATA(WavFile) align=4
+PUBLIC_FN(Oidos_WavFileHeader):
 	db	"RIFF"
 	dd	36+TOTAL_SAMPLES*4
 	db	"WAVE"
@@ -68,53 +73,53 @@ _Oidos_WavFileHeader:
 
 ;; ********** System structures **********
 
-section	WaveForm rdata align=1
-_WaveFormat:
+SECT_DATA(WaveForm) align=1
+WaveFormat:
 	dw	1,2
 	dd	SAMPLE_RATE
 	dd	SAMPLE_RATE*4
 	dw	4,16,0
 
-section WaveHdr data align=4
-_WaveHdr:
-	dd	_Oidos_MusicBuffer
+SECT_DATA(WaveHdr) align=4
+WaveHdr:
+	dd	PUBLIC_FN(Oidos_MusicBuffer)
 	dd	(TOTAL_SAMPLES*4)
 	dd	0,0,0,0,0,0
 
-section wavehand bss align=4
-_WaveOutHandle:
-.align16
+SECT_BSS(wavehand) align=4
+WaveOutHandle:
+.align16:
 	resd 1
 
-section WaveTime data align=4
-_WaveTime:
+SECT_DATA(WaveTime) align=4
+WaveTime:
 	dd	4,0,0,0,0,0,0,0
 
 
 ;; ********** Internal buffers **********
 
-section freqarr bss align=16
+SECT_BSS(freqarr) align=16
 PartialArray:
 .align16:
 	resq	10000*3*2
 
-section sampbuf bss align=16
+SECT_BSS(sampbuf) align=16
 SampleBuffer:
 .align24:
 	reso	MAX_TOTAL_INSTRUMENT_SAMPLES
 
-section mixbuf bss align=16
+SECT_BSS(mixbuf) align=16
 MixingBuffer:
 .align24:
 	reso	TOTAL_SAMPLES
 
 %if NUM_TRACKS_WITH_REVERB > 0
-section revbuf bss align=16
+SECT_BSS(revbuf) align=16
 ReverbBuffer:
 .align24:
 	reso	TOTAL_SAMPLES
 
-section delbuf bss align=8
+SECT_BSS(delbuf) align=8
 DelayBuffer:
 .align16:
 	resq	25600
@@ -150,7 +155,7 @@ struc params
 
 ;; ********** Internal constants and tables **********
 
-section base data align=16
+SECT_DATA(base) align=16
 baseptr:
 
 c_oneone:		dq		1.0,1.0
@@ -168,11 +173,11 @@ ReverbParams:
 	dd	REVERB_FILTER_HIGH, REVERB_FILTER_LOW, REVERB_DAMPEN_HIGH, REVERB_DAMPEN_LOW, REVERB_VOLUME_LEFT
 %endif
 
-ParamsPtr:		dd	_InstrumentParams
-TonesPtr:		dd	_InstrumentTones
-TovelPtr:		dd	_TrackData
-LengthPtr:		dd	_NoteLengths
-NotePtr:		dd	_NoteSamples
+ParamsPtr:		dd	InstrumentParams
+TonesPtr:		dd	InstrumentTones
+TovelPtr:		dd	TrackData
+LengthPtr:		dd	NoteLengths
+NotePtr:		dd	NoteSamples
 MixingPtr:		dd	0
 
 %if NUM_TRACKS_WITH_REVERB > 0
@@ -180,11 +185,11 @@ ReverbState:
 	dq	0.0,0.0,0.0,0.0
 %endif
 
-section offset rdata align=4
+SECT_RDATA(offset) align=4
 c_timeoffset:
 	dd OIDOS_TIMER_OFFSET*4
 
-section tempo rdata align=4
+SECT_RDATA(tempo) align=4
 c_ticklength:
 	dd SAMPLES_PER_TICK*4
 
@@ -233,7 +238,7 @@ c_ticklength:
 
 ;; ********** Instrument calculation **********
 
-section makeinst text align=1
+SECT_TEXT(makeinst) align=1
 MakeInstrument:
 	mov				PARAMS, [BASE + ParamsPtr]
 
@@ -255,7 +260,7 @@ MakeInstrument:
 	add				RANDOM, [PARAMS]	; seed
 	add				PARAMS, byte 4
 	shl				RANDOM, 2
-	add				RANDOM, _Oidos_RandomData
+	add				RANDOM, PUBLIC_FN(Oidos_RandomData)
 
 	GETRANDOM							; subtone
 	fabs
@@ -437,7 +442,7 @@ MakeInstrument:
 
 ;; ********** Track mixing **********
 
-	section makechan text align=1
+SECT_TEXT(makechan) align=1
 MakeChannel:
 	mov				SAMPLE, SampleBuffer
 	push			byte 0
@@ -589,8 +594,8 @@ MakeChannel:
 
 ;; ********** Main **********
 
-section synth text align=1
-_Oidos_GenerateMusic:
+SECT_TEXT(synth) align=1
+PUBLIC_FN(Oidos_GenerateMusic):
 %if OIDOS_SAVE_REGISTERS
 	pusha
 %endif
@@ -615,7 +620,7 @@ _Oidos_GenerateMusic:
 %if REVERB_MIN_DELAY != 0
 	sub				eax, REVERB_MIN_DELAY
 %endif
-	mul				dword [_Oidos_RandomData + REVERB_RANDOMSEED*4 + ecx*4]
+	mul				dword [PUBLIC_FN(Oidos_RandomData) + REVERB_RANDOMSEED*4 + ecx*4]
 	cmp				edx, esi
 	jae short		.skip
 
@@ -692,7 +697,7 @@ _Oidos_GenerateMusic:
 	fcmovnb			st0, st1
 	fchs
 
-	fistp			word [_Oidos_MusicBuffer + ebx*2]
+	fistp			word [PUBLIC_FN(Oidos_MusicBuffer) + ebx*2]
 
 	add				ebx, byte 1
 	cmp				ebx, TOTAL_SAMPLES*2
@@ -704,7 +709,7 @@ _Oidos_GenerateMusic:
 %endif
 	ret
 
-section rfilter text align=1
+SECT_TEXT(rfilter) align=1
 ReverbFilter:
 %macro FILTER 0
 	; Basic low-pass filter
@@ -731,40 +736,43 @@ ReverbFilter:
 	ret
 
 
-;; ********** Play **********
+; ********** Play **********
 
-section startsnd text align=1
-_Oidos_StartMusic:
+%ifdef WIN32
+SECT_TEXT(startsnd) align=1
+PUBLIC_FN(Oidos_StartMusic):
 	; Start music
 	push	byte 0
 	push	byte 0
 	push	byte 0
-	push	_WaveFormat
+	push	WaveFormat
 	push	byte -1
-	push	_WaveOutHandle
+	push	WaveOutHandle
 	call	[__imp__waveOutOpen@24]
 
 	push	byte 32					; sizeof(WAVEHDR)
-	push	_WaveHdr
-	push	dword [_WaveOutHandle]					; waveOutHandle
+	push	WaveHdr
+	push	dword [WaveOutHandle]					; waveOutHandle
 	call	[__imp__waveOutPrepareHeader@12]
 
 	push	byte 32					; sizeof(WAVEHDR)
-	push	_WaveHdr
-	push	dword [_WaveOutHandle]
+	push	WaveHdr
+	push	dword [WaveOutHandle]
 	call	[__imp__waveOutWrite@12]
 	ret
 
-section getpos text align=1
-_Oidos_GetPosition:
+SECT_TEXT(getpos) align=1
+PUBLIC_FN(Oidos_GetPosition):
 	push	byte 32					; sizeof(MMTIME)
-	push	_WaveTime
-	push	dword [_WaveOutHandle]
+	push	WaveTime
+	push	dword [WaveOutHandle]
 	call	[__imp__waveOutGetPosition@12]
 
-	fild	dword [_WaveTime+4]
+	fild	dword [WaveTime+4]
 %if OIDOS_TIMER_OFFSET>0
 	fiadd	dword [c_timeoffset]
 %endif
 	fidiv	dword [c_ticklength]
 	ret
+%endif
+

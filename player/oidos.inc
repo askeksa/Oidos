@@ -1,17 +1,21 @@
 ; See oidos.h for documentation.
 
+%include "platform.inc"
+
 ; Functions
-extern _Oidos_FillRandomData
-extern _Oidos_GenerateMusic
-extern _Oidos_StartMusic
-extern _Oidos_GetPosition
+extern PUBLIC_FN(Oidos_FillRandomData)
+extern PUBLIC_FN(Oidos_GenerateMusic)
+extern PUBLIC_FN(Oidos_StartMusic)
+extern PUBLIC_FN(Oidos_GetPosition)
 
 ; Variables
-extern _Oidos_MusicBuffer
-extern _Oidos_TicksPerSecond
-extern _Oidos_MusicLength
-extern _Oidos_WavFileHeader
-extern _Oidos_RandomData
+extern PUBLIC_FN(Oidos_MusicBuffer)
+extern PUBLIC_FN(Oidos_TicksPerSecond)
+extern PUBLIC_FN(Oidos_MusicLength)
+extern PUBLIC_FN(Oidos_WavFileHeader)
+extern PUBLIC_FN(Oidos_RandomData)
 
 ; GUID
-extern ?ID3D11Texture2D_ID@@3U_GUID@@A
+extern ID3D11Texture2D_ID
+
+; vim: set ft=asm

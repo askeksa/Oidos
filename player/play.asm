@@ -1,5 +1,7 @@
 ; Stand-alone executable for playing an Oidos song.
 
+; (Windows-only)
+
 %include "oidos.inc"
 
 global _main
