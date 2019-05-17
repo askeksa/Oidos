@@ -21,7 +21,7 @@ extern "C" {
 
 	// On Linux, there are too many sound APIs to choose from,
 	// so I can't just force anyone to use a specific one. -pcy
-#ifdef WIN32
+#ifdef _WIN32
 	// Play the music
 	void Oidos_StartMusic();
 
