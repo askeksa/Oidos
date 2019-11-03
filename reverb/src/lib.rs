@@ -5,14 +5,17 @@
 extern crate vst;
 
 use std::cmp::Ordering;
+use std::sync::Arc;
 
 use vst::buffer::AudioBuffer;
-use vst::plugin::{Category, Info, Plugin};
+use vst::plugin::{Category, Info, Plugin, PluginParameters};
+use vst::util::ParameterTransfer;
 
 const BASE_SAMPLE_RATE: f32 = 44100.0;
 const DELAY_STEP: f32 = 256f32 / BASE_SAMPLE_RATE;
 const NBUFS: usize = 200;
 const NOISESIZE: usize = 64;
+const NPARAMS: usize = 20;
 
 pub struct OidosRandomData {
 	data: Vec<u32>
@@ -130,7 +133,13 @@ struct OidosReverbPlugin {
 	fhstate: Vec<f64>,
 	dlstate: Vec<f64>,
 	dhstate: Vec<f64>,
-	buffer_index: usize
+	buffer_index: usize,
+
+	param_transfer: Arc<OidosReverbParameterTransfer>,
+}
+
+struct OidosReverbParameterTransfer {
+	transfer: ParameterTransfer,
 }
 
 impl Default for OidosReverbPlugin {
@@ -141,6 +150,12 @@ impl Default for OidosReverbPlugin {
 			0.32, 0.32, 0.0,  0.0,  0.0,
 			0.0,  0.0,  0.0,  0.0,  0.0
 		];
+		let param_transfer = Arc::new(OidosReverbParameterTransfer {
+			transfer: ParameterTransfer::new(NPARAMS),
+		});
+		for (index, value) in param_values.iter().enumerate() {
+			param_transfer.transfer.set_parameter(index, *value);
+		}
 		let buffer_size = buffer_size_for_sample_rate(BASE_SAMPLE_RATE);
 		OidosReverbPlugin {
 			random: OidosRandomData::default(),
@@ -153,35 +168,14 @@ impl Default for OidosReverbPlugin {
 			fhstate: vec![0f64; NBUFS],
 			dlstate: vec![0f64; NBUFS],
 			dhstate: vec![0f64; NBUFS],
-			buffer_index: 0
+			buffer_index: 0,
+
+			param_transfer: param_transfer,
 		}
 	}
 }
 
-impl Plugin for OidosReverbPlugin {
-	fn get_info(&self) -> Info {
-		Info {
-			name: "OidosReverb".to_string(),
-			vendor: "Loonies".to_string(),
-			unique_id: 0x550D10,
-			version: 2100,
-			presets: 0,
-			parameters: 20,
-			inputs: 2,
-			outputs: 2,
-			category: Category::Effect,
-			f64_precision: false,
-
-			.. Info::default()
-		}
-	}
-
-	fn set_sample_rate(&mut self, rate: f32) {
-		self.sample_rate = rate;
-		self.buffer_size = buffer_size_for_sample_rate(rate);
-		self.delay_buffers = vec![vec![0f64; self.buffer_size]; NBUFS]
-	}
-
+impl PluginParameters for OidosReverbParameterTransfer {
 	fn get_parameter_name(&self, index: i32) -> String {
 		[
 			"mix", "pan", "delaymin", "delaymax", "delayadd",
@@ -192,12 +186,11 @@ impl Plugin for OidosReverbPlugin {
 	}
 
 	fn get_parameter(&self, index: i32) -> f32 {
-		self.param_values[index as usize]
+		self.transfer.get_parameter(index as usize)
 	}
 
-	fn set_parameter(&mut self, index: i32, value: f32) {
-		self.param_values[index as usize] = value;
-		self.param = OidosReverbParameters::make(&self.param_values);
+	fn set_parameter(&self, index: i32, value: f32) {
+		self.transfer.set_parameter(index as usize, value);
 	}
 
 	fn get_parameter_text(&self, index: i32) -> String {
@@ -210,18 +203,22 @@ impl Plugin for OidosReverbPlugin {
 			}
 		};
 
-		let p = &self.param;
+		let mut param_values = [0f32; NPARAMS];
+		for index in 0..NPARAMS {
+			param_values[index] = self.get_parameter(index as i32);
+		}
+		let p = OidosReverbParameters::make(&param_values);
 		match index {
-			0/* mix */        => format!("{:.1}", self.param_values[0] * 10.0),
-			1/* pan */        => pantext(self.param_values[1]),
+			0/* mix */        => format!("{:.1}", param_values[0] * 10.0),
+			1/* pan */        => pantext(param_values[1]),
 			2/* delaymin */   => format!("{:.0}", 1000.0 * (p.delaymin as f32 / BASE_SAMPLE_RATE)),
 			3/* delaymax */   => format!("{:.0}", 1000.0 * (p.delaymax as f32 / BASE_SAMPLE_RATE)),
 			4/* delayadd */   => format!("{:.0}", 1000.0 * (p.delayadd as f32 / BASE_SAMPLE_RATE)),
-			5/* halftime */   => format!("{:.2}", self.param_values[5]),
-			6/* filterlow */  => format!("{:.4}", self.param_values[6].powi(2)),
-			7/* filterhigh */ => format!("{:.4}", self.param_values[7].powi(2)),
-			8/* dampenlow */  => format!("{:.4}", self.param_values[8].powi(2)),
-			9/* dampenhigh */ => format!("{:.4}", self.param_values[9].powi(2)),
+			5/* halftime */   => format!("{:.2}", param_values[5]),
+			6/* filterlow */  => format!("{:.4}", param_values[6].powi(2)),
+			7/* filterhigh */ => format!("{:.4}", param_values[7].powi(2)),
+			8/* dampenlow */  => format!("{:.4}", param_values[8].powi(2)),
+			9/* dampenhigh */ => format!("{:.4}", param_values[9].powi(2)),
 			10/* n */         => format!("{}", p.nbufs),
 			11/* seed */      => format!("{}", p.seed / 2048),
 
@@ -246,8 +243,46 @@ impl Plugin for OidosReverbPlugin {
 			_ => ""
 		}.to_string()
 	}
+}
+
+impl Plugin for OidosReverbPlugin {
+	fn get_info(&self) -> Info {
+		Info {
+			name: "OidosReverb".to_string(),
+			vendor: "Loonies".to_string(),
+			unique_id: 0x550D10,
+			version: 2100,
+			presets: 0,
+			parameters: NPARAMS as i32,
+			inputs: 2,
+			outputs: 2,
+			category: Category::Effect,
+			f64_precision: false,
+
+			.. Info::default()
+		}
+	}
+
+	fn get_parameter_object(&mut self) -> Arc<dyn PluginParameters> {
+		Arc::clone(&self.param_transfer) as Arc<dyn PluginParameters>
+	}
+
+	fn set_sample_rate(&mut self, rate: f32) {
+		self.sample_rate = rate;
+		self.buffer_size = buffer_size_for_sample_rate(rate);
+		self.delay_buffers = vec![vec![0f64; self.buffer_size]; NBUFS]
+	}
 
 	fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
+		let mut changed = false;
+		for (index, value) in self.param_transfer.transfer.iterate(true) {
+			self.param_values[index] = value;
+			changed = true;
+		}
+		if changed {
+			self.param = OidosReverbParameters::make(&self.param_values);
+		}
+
 		let (inputs, mut outputs) = buffer.split();
 		let size = inputs[0].len();
 
