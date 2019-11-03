@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 import xml.dom
 import xml.dom.minidom

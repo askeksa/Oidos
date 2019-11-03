@@ -2,7 +2,7 @@
 This setup is for easily building an executable version of a piece of music
 created using Oidos.
 
-Proceed as follows:
+For Windows, proceed as follows:
 
 1. Place your music here, named music.xrns.
 2. Edit the music.txt file to contain the text you would like the executable
@@ -17,5 +17,11 @@ Proceed as follows:
 
 If no executables appear, the script encountered an error along the way.
 Consult the output window text for details.
+
+For Linux:
+
+1. Place your music here, named music.xrns.
+2. Run build.sh to get an executable named dump_wav, which writes the music
+   in WAV format to stdout.
 
 Enjoy!
