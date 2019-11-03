@@ -1,9 +1,8 @@
 // We want the DLL to be called Oidos
 #![allow(non_snake_case)]
 
-#[macro_use]
-extern crate vst;
-extern crate rand;
+#[macro_use] extern crate vst;
+#[cfg(test)] extern crate rand;
 
 mod cache;
 mod generate;

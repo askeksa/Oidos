@@ -4,7 +4,7 @@ version = "2.1.0"
 authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
 
 [dependencies]
-vst = { git = "https://github.com/askeksa/rust-vst" }
+vst = { git = "https://github.com/askeksa/vst-rs" }
 
 [lib]
 name = "OidosReverb"

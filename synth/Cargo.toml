@@ -5,8 +5,10 @@ authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
 build = "build.rs"
 
 [dependencies]
-vst = { git = "https://github.com/askeksa/rust-vst" }
-rand = "0.3"
+vst = { git = "https://github.com/askeksa/vst-rs" }
+
+[dev-dependencies]
+rand = "0.4"
 
 [build-dependencies]
 nasm-rs = "= 0.1.3"
