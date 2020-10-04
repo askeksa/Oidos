@@ -1,0 +1,11 @@
+[package]
+name = "rust_example"
+version = "0.1.0"
+authors = ["Aske Simon Christensen <askesc@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+nasm-rs = "= 0.1.3"
