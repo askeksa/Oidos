@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import sys
 import zipfile
@@ -130,11 +130,11 @@ class Note:
 			try:
 				self.velocity = 127 if str(velocity) == "" or str(velocity) == ".." else int(str(velocity), 16)
 			except ValueError:
-				print "Track '%s' column %d pattern %d line %d: Illegal velocity value '%s'" % (tname, column, pat, patline, str(velocity));
+				print("Track '%s' column %d pattern %d line %d: Illegal velocity value '%s'" % (tname, column, pat, patline, str(velocity)))
 				self.velocity = 127
 
 def notename(tone):
-	return Note.NOTENAMES[tone%12] + str(tone/12)
+	return Note.NOTENAMES[tone%12] + str(int(tone/12))
 
 
 def instplugins(xinst):
@@ -253,7 +253,7 @@ class Track:
 		for note in notes:
 			if prev is not None and not prev.off:
 				if prev.instr is None:
-					raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument" % (name, column, prev.pat, prev.patline));
+					raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument" % (name, column, prev.pat, prev.patline))
 				length = note.line - prev.line
 				if length < 0:
 					raise InputException("Track '%s' column %d pattern %d: Reversed note order from %d to %d" % (name, column, prev.pat, prev.patline, note.patline))
@@ -279,7 +279,7 @@ class Track:
 		else:
 			self.singular_length = None
 
-		self.tavs = sorted(set(self.notemap.values()), key = (lambda (t,v) : (t,v)))
+		self.tavs = sorted(set(self.notemap.values()), key = (lambda tav : tav))
 		for i,tav in enumerate(self.tavs):
 			if tav[0] is None:
 				raise InputException("Track '%s' has a toneless note" % name)
@@ -651,18 +651,18 @@ def filterTractNotes(tname, column, notes, instr):
 def pickupReverb(xdevices, reverb, tname, ticklength):
 	xplugin = xdevices.AudioPluginDevice
 	if len(xplugin) > 1:
-		raise InputException("Track '%s' has more than one plugin device" % tname);
+		raise InputException("Track '%s' has more than one plugin device" % tname)
 
 	if isactive(xplugin):
 		plugin_id = str(xplugin.PluginIdentifier)
 		if plugin_id not in ["MetaEffect", "OidosReverb"]:
-			raise InputException("Track '%s' has an unknown plugin device" % tname);
+			raise InputException("Track '%s' has an unknown plugin device" % tname)
 
 		params = [float(x) for x in xplugin.Parameters.Parameter.Value]
 		new_reverb = Reverb(params)
 
 		if reverb is not None and not new_reverb == reverb:
-			raise InputException("Track '%s' has different reverb from an earlier track" % tname);
+			raise InputException("Track '%s' has different reverb from an earlier track" % tname)
 		reverb = new_reverb
 
 	return reverb
@@ -690,13 +690,13 @@ def makeTracks(xsong, ticklength):
 		for xmixer in xdevices.GroupTrackMixerDevice:
 			if isactive(xmixer):
 				if float(xmixer.Volume.Value) != 1.0 or float(xmixer.PostVolume.Value) != 1.0:
-					raise InputException("Group track '%s' has non-zero volume" % tname);
+					raise InputException("Group track '%s' has non-zero volume" % tname)
 				if float(xmixer.Panning.Value) != 0.5 or float(xmixer.PostPanning.Value) != 0.5:
-					raise InputException("Group track '%s' has non-center panning" % tname);
+					raise InputException("Group track '%s' has non-center panning" % tname)
 		if isactive(xdevices.SendDevice):
-			raise InputException("Group track '%s' uses Send" % tname);
+			raise InputException("Group track '%s' uses Send" % tname)
 		if isactive(xdevices.AudioPluginDevice):
-			raise InputException("Group track '%s' uses reverb" % tname);
+			raise InputException("Group track '%s' uses reverb" % tname)
 
 	for tr,xtrack in enumerate(xsong.Tracks.SequencerTrack):
 		if str(xtrack.State) != "Active":
@@ -714,9 +714,9 @@ def makeTracks(xsong, ticklength):
 		volume *= makePanning(xdevice.PostPanning.Value)
 		while isactive(xdevices.SendDevice):
 			if isactive(xdevices.AudioPluginDevice):
-				raise InputException("Track '%s' uses both reverb and send" % tname);
+				raise InputException("Track '%s' uses both reverb and send" % tname)
 			if str(xdevices.SendDevice.MuteSource) != "true":
-				raise InputException("Track '%s' uses send without Mute Source" % tname);
+				raise InputException("Track '%s' uses send without Mute Source" % tname)
 			volume *= makeVolume(xdevices.SendDevice.SendAmount.Value)
 			volume *= makePanning(xdevices.SendDevice.SendPan.Value)
 			dest = int(float(xdevices.SendDevice.DestSendTrack.Value))
@@ -740,7 +740,7 @@ def makeTracks(xsong, ticklength):
 				if not note.off:
 					instr = instruments[note.instr]
 					if instr is None:
-						raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument (%d)" % (tname, column, note.pat, note.patline, note.instr));
+						raise InputException("Track '%s' column %d pattern %d line %d: Undefined instrument (%d)" % (tname, column, note.pat, note.patline, note.instr))
 					if note.instr not in track_instrs:
 						track_instrs.append(note.instr)
 
@@ -765,12 +765,12 @@ def makeMusic(xsong):
 	xgsd = xsong.GlobalSongData
 	if xgsd.PlaybackEngineVersion and int(xgsd.PlaybackEngineVersion) >= 4:
 		lines_per_minute = float(xgsd.BeatsPerMin) * float(xgsd.LinesPerBeat)
-		print "New timing format: %d ticks per minute" % lines_per_minute
+		print("New timing format: %d ticks per minute" % lines_per_minute)
 	else:
 		lines_per_minute = float(xgsd.BeatsPerMin) * 24.0 / float(xgsd.TicksPerLine)
-		print "Old timing format: %d ticks per minute" % lines_per_minute
+		print("Old timing format: %d ticks per minute" % lines_per_minute)
 	ticklength = 60.0 / lines_per_minute
-	print
+	print()
 
 	tracks,n_reverb_tracks,reverb,instruments = makeTracks(xsong, ticklength)
 
@@ -822,7 +822,7 @@ def printMusicStats(music, ansi):
 				f += c
 		return f
 
-	print "Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength)
+	print("Music length: %d ticks at %0.2f ticks per minute" % (music.length, 60.0 / music.ticklength))
 
 	max_memory_mb = 0
 	max_memory_instr = None
@@ -830,15 +830,15 @@ def printMusicStats(music, ansi):
 	ii = None
 	for ti,tn in enumerate(music.track_order):
 		if music.n_reverb_tracks > 0 and ti == 0:
-			print
-			print "Tracks with reverb:"
+			print()
+			print("Tracks with reverb:")
 		if music.n_reverb_tracks > 0 and ti == music.n_reverb_tracks:
-			print
-			print "Tracks without reverb:"
+			print()
+			print("Tracks without reverb:")
 
 		track = music.tracks[tn]
 		if track.instr != ii:
-			print
+			print()
 			ii = track.instr
 			instr = music.instrument_map[ii]
 			modes = instr.paramblock[0]
@@ -851,30 +851,30 @@ def printMusicStats(music, ansi):
 				max_memory_instr = instr.title
 			burden = modes * fat * len(instr.tones) * longest
 			total_burden += burden
-			print form("H") % instr.title
-			print " Memory:    " + form(" tones X longest = %d X %.3f = B (B %s)") % (len(instr.tones), longest, memory, memory_mb, "MB")
-			print " Burden:    " + form(" modes X fat X tones X longest = %d X %d X %d X %.3f = B") % (modes, fat, len(instr.tones), longest, burden)
+			print(form("H") % instr.title)
+			print(" Memory:    " + form(" tones X longest = %d X %.3f = B (B %s)") % (len(instr.tones), longest, memory, memory_mb, "MB"))
+			print(" Burden:    " + form(" modes X fat X tones X longest = %d X %d X %d X %.3f = B") % (modes, fat, len(instr.tones), longest, burden))
 			tones = ""
 			for t in instr.tones:
 				tones += form(" TN") % (notename(t), instr.tonecount[t])
-			print " Tones:     " + tones
+			print(" Tones:     " + tones)
 			velocities = ""
 			for v in instr.velocities:
 				velocities += form(" VN") % (v, instr.velocitycount[v])
 			vbits = int(round(math.log(128 / instr.velocity_quantum, 2)))
-			print " Velocities:" + velocities + form(" I") % vbits
+			print(" Velocities:" + velocities + form(" I") % vbits)
 			v2 = track.volume * track.volume
 			volume = math.log((v2.left + v2.right) / 2, 10) * 10
 			panning = round(v2.right / (v2.left + v2.right) * 100) - 50
 			ptext = "Center" if panning == 0 else "%d L" % -panning if panning < 0 else "%d R" % panning
-			print " Volume:     %+.1f dB  %s" % (volume, ptext)
+			print(" Volume:     %+.1f dB  %s" % (volume, ptext))
 
-		print form(" H") % track.title
+		print(form(" H") % track.title)
 
 		lengths = ""
 		for l in sorted(track.note_lengths.keys()):
 			lengths += form(" LN") % (l, track.note_lengths[l])
-		print "  Lengths:  " + lengths
+		print("  Lengths:  " + lengths)
 
 		tnotes = ""
 		for t,v in track.tavs:
@@ -883,19 +883,19 @@ def printMusicStats(music, ansi):
 				if track.notemap[n] == (t,v):
 					num_notes += 1
 			tnotes += form(" T/VN") % (notename(t), v, num_notes)
-		print "  Notes:    " + tnotes
+		print("  Notes:    " + tnotes)
 
 	seconds = int(round(total_burden / 5000))
-	print
-	print "Maximum instrument memory: " + form("B %s (H)") % (max_memory_mb, "MB", max_memory_instr)
-	print "Total burden: " + form("B (approximately D on a fast %s)") % (total_burden, seconds / 60, seconds % 60, "CPU")
+	print()
+	print("Maximum instrument memory: " + form("B %s (H)") % (max_memory_mb, "MB", max_memory_instr))
+	print("Total burden: " + form("B (approximately D on a fast %s)") % (total_burden, seconds / 60, seconds % 60, "CPU"))
 
 
 def writefile(filename, s):
-	f = open(filename, "wb")
+	f = open(filename, "w", encoding="utf-8", newline="\n")
 	f.write(s)
 	f.close()
-	print "Wrote file %s" % filename
+	print("Wrote file %s" % filename)
 
 ansi = False
 files = []
@@ -906,7 +906,7 @@ for a in sys.argv[1:]:
 		files.append(a)
 
 if len(files) != 2:
-	print "Usage: %s [-ansi] <input xrns file> <output asm file>" % sys.argv[0]
+	print("Usage: %s [-ansi] <input xrns file> <output asm file>" % sys.argv[0])
 	sys.exit(1)
 
 infile = files[0]
@@ -915,9 +915,9 @@ outfile = files[1]
 x = XML.makeXML(zipfile.ZipFile(infile).read("Song.xml"))
 try:
 	music = makeMusic(x.RenoiseSong)
-	print
+	print()
 	printMusicStats(music, ansi)
-	print
+	print()
 
 	writefile(outfile, music.export())
 
@@ -934,6 +934,5 @@ try:
 		data = header + body
 		writefile(syncfile, data)
 
-except InputException, e:
-	print "Error in input song: %s" % e.message
-
+except InputException as e:
+	print("Error in input song: %s" % e.message)
