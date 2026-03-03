@@ -275,7 +275,7 @@ class Track:
 
 		if len(self.note_lengths) == 1:
 			for l in self.note_lengths:
-				self.singular_length = l if l <= 255 else None
+				self.singular_length = l
 		else:
 			self.singular_length = None
 
@@ -333,10 +333,10 @@ class Music:
 					self.track_order.append(ti)
 					instr.columns += 1
 					instr.latest_note = max(instr.latest_note, track.latest_note)
-					track.volume *= self.master_volume
-					if volume is not None and not track.volume == volume:
+					v = track.volume * self.master_volume
+					if volume is not None and not v == volume:
 						raise InputException("Track '%s' has different volume/panning than previous tracks with same instrument" % track.title)
-					volume = track.volume
+					volume = v
 					for t,v in track.tavs:
 						velocities.add(v)
 			instr.volume *= volume
@@ -530,7 +530,7 @@ class Music:
 			prev_tone_id = 0
 			for t,v in track.tavs:
 				tone_id = instr.tonemap[t]
-				vol = (v + instr.velocity_quantum / 2) / instr.velocity_quantum
+				vol = int((v + instr.velocity_quantum / 2) / instr.velocity_quantum)
 				tavdata += [tone_id - prev_tone_id, vol]
 				prev_tone_id = tone_id
 			tavdata += [-128]
@@ -710,8 +710,6 @@ def makeTracks(xsong, ticklength):
 			xdevice = xdevices.TrackMixerDevice
 		volume = makeVolume(xdevice.Volume.Value)
 		volume *= makePanning(xdevice.Panning.Value)
-		volume *= makeVolume(xdevice.PostVolume.Value)
-		volume *= makePanning(xdevice.PostPanning.Value)
 		while isactive(xdevices.SendDevice):
 			if isactive(xdevices.AudioPluginDevice):
 				raise InputException("Track '%s' uses both reverb and send" % tname)
@@ -726,8 +724,8 @@ def makeTracks(xsong, ticklength):
 				xdevice = xdevices.SendTrackMixerDevice
 			volume *= makeVolume(xdevice.Volume.Value)
 			volume *= makePanning(xdevice.Panning.Value)
-			volume *= makeVolume(xdevice.PostVolume.Value)
-			volume *= makePanning(xdevice.PostPanning.Value)
+		volume *= makeVolume(xdevice.PostVolume.Value)
+		volume *= makePanning(xdevice.PostPanning.Value)
 
 		for column in range(1, ncols + 1):
 			if str(xtrack.NoteColumnStates.NoteColumnState[column - 1]) != "Active":
