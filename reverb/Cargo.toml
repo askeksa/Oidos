@@ -2,6 +2,7 @@
 name = "OidosReverb"
 version = "2.1.0"
 authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
+edition = "2024"
 
 [dependencies]
 vst = "0.3.0"

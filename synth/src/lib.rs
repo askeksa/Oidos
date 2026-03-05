@@ -17,8 +17,8 @@ use vst::plugin::Info;
 #[cfg(test)] use vst::host::HostBuffer;
 #[cfg(test)] use vst::plugin::Plugin;
 
-use synth::{SynthInfo, SynthPlugin};
-use oidos_generate::{OidosSoundGenerator};
+use crate::synth::{SynthInfo, SynthPlugin};
+use crate::oidos_generate::OidosSoundGenerator;
 
 
 struct OidosSynthInfo;

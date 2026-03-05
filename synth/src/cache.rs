@@ -1,7 +1,7 @@
 
 use std::ops::{Index, IndexMut};
 
-use generate::{Sample, SoundGenerator};
+use crate::generate::{Sample, SoundGenerator};
 
 
 const BLOCK_SHIFT: usize = 12;

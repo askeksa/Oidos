@@ -3,7 +3,7 @@ use std::{f32, f64};
 use std::ops::{Index};
 #[cfg(test)] use std::collections::HashMap;
 
-use generate::{SoundGenerator, SoundParameters};
+use crate::generate::{SoundGenerator, SoundParameters};
 
 
 const TOTAL_SEMITONES: f32 = 120f32;
@@ -335,7 +335,7 @@ impl SoundGenerator for OidosSoundGenerator {
 	fn new(param: &OidosSoundParameters, tone: u8, time: usize, random: &OidosRandomData) -> OidosSoundGenerator {
 		let n_partials = param.modes as usize * param.fat as usize;
 		let n_partials_in_array = (n_partials + 3) & !3;
-		let mut gen = OidosSoundGenerator {
+		let mut generator = OidosSoundGenerator {
 			n_partials:   n_partials,
 
 			state_re:     Vec::with_capacity(n_partials_in_array),
@@ -379,31 +379,31 @@ impl SoundGenerator for OidosSoundGenerator {
 			for _ in 0..param.fat as usize {
 				let ptone = mtone + getrandom() * param.width as f64;
 				let phase = param.base_freq as f64 * 2f64.powf(ptone / 12.0);
-				gen.step_re.push(ampmul * phase.cos());
-				gen.step_im.push(ampmul * phase.sin());
+				generator.step_re.push(ampmul * phase.cos());
+				generator.step_im.push(ampmul * phase.sin());
 
 				let angle = getrandom() * f64::consts::PI + phase * time as f64;
 				let amp = mamp * ampmul.powi(time as i32);
-				gen.state_re.push(amp * angle.cos());
-				gen.state_im.push(amp * angle.sin());
+				generator.state_re.push(amp * angle.cos());
+				generator.state_im.push(amp * angle.sin());
 
 				let f_startlow = 1.0 - (f_lowlimit - ptone) * param.f_slopelow as f64;
 				let f_starthigh = 1.0 - (ptone - f_highlimit) * param.f_slopehigh as f64;
-				gen.filter_low.push(f_startlow + gen.f_add_low * time as f64);
-				gen.filter_high.push(f_starthigh + gen.f_add_high * time as f64);
+				generator.filter_low.push(f_startlow + generator.f_add_low * time as f64);
+				generator.filter_high.push(f_starthigh + generator.f_add_high * time as f64);
 			}
 		}
 
 		for _ in n_partials..n_partials_in_array {
-			gen.state_re.push(0.0);
-			gen.state_im.push(0.0);
-			gen.step_re.push(0.0);
-			gen.step_im.push(0.0);
-			gen.filter_low.push(0.0);
-			gen.filter_high.push(0.0);
+			generator.state_re.push(0.0);
+			generator.state_im.push(0.0);
+			generator.step_re.push(0.0);
+			generator.step_im.push(0.0);
+			generator.filter_low.push(0.0);
+			generator.filter_high.push(0.0);
 		}
 
-		gen
+		generator
 	}
 
 	fn produce_sample(&mut self) -> f32 {
@@ -446,7 +446,7 @@ impl OidosSoundGenerator {
 	}
 }
 
-extern "cdecl" {
+unsafe extern "C" {
 	fn supports_avx() -> bool;
 	fn additive_core_sse2(state_re: *mut f64, state_im: *mut f64, step_re: *const f64, step_im: *const f64,
 	                      filter_low: *mut f64, filter_high: *mut f64, f_add_low: f64, f_add_high: f64, n: usize) -> f64;

@@ -10,8 +10,8 @@ use vst::event::{Event, MidiEvent};
 use vst::host::Host;
 use vst::plugin::{CanDo, Category, HostCallback, Info, Plugin, PluginParameters};
 
-use cache::SoundCache;
-use generate::{Sample, SoundGenerator, SoundParameters};
+use crate::cache::SoundCache;
+use crate::generate::{Sample, SoundGenerator, SoundParameters};
 
 
 #[allow(dead_code)]
