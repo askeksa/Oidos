@@ -173,11 +173,11 @@ ReverbParams:
 	dd	REVERB_FILTER_HIGH, REVERB_FILTER_LOW, REVERB_DAMPEN_HIGH, REVERB_DAMPEN_LOW, REVERB_VOLUME_LEFT
 %endif
 
-ParamsPtr:		dd	InstrumentParams
-TonesPtr:		dd	InstrumentTones
-TovelPtr:		dd	TrackData
-LengthPtr:		dd	NoteLengths
-NotePtr:		dd	NoteSamples
+ParamsPtr:		dd	PUBLIC_SYM(Oidos_InstrumentParams)
+TonesPtr:		dd	PUBLIC_SYM(Oidos_InstrumentTones)
+TovelPtr:		dd	PUBLIC_SYM(Oidos_TrackData)
+LengthPtr:		dd	PUBLIC_SYM(Oidos_NoteLengths)
+NotePtr:		dd	PUBLIC_SYM(Oidos_NoteSamples)
 MixingPtr:		dd	0
 
 %if NUM_TRACKS_WITH_REVERB > 0

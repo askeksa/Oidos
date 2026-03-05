@@ -406,6 +406,9 @@ class Music:
 	def label(self, l):
 		self.out += "%s:\n" % l
 
+	def publicLabel(self, l):
+		self.out += "PUBLIC_SYM(%s):\n" % l
+
 	def notelist(self, datafunc, trackterm, prefix):
 		for ti in self.track_order:
 			track = self.tracks[ti]
@@ -484,7 +487,7 @@ class Music:
 
 		# Instrument parameters
 		self.out += "\n\n\tSECTION_DATA(iparam) align=4\n"
-		self.out += "\nInstrumentParams:\n"
+		self.publicLabel("Oidos_InstrumentParams")
 		for instr in self.instruments:
 			self.label(".i%02d" % instr.number)
 			self.comment(instr.title)
@@ -503,7 +506,7 @@ class Music:
 
 		# Instrument tones
 		self.out += "\n\n\tSECTION_DATA(itones) align=1\n"
-		self.out += "\nInstrumentTones:\n"
+		self.publicLabel("Oidos_InstrumentTones")
 		for instr in self.instruments:
 			self.label(".i%02d" % instr.number)
 			self.comment(instr.title)
@@ -517,7 +520,7 @@ class Music:
 
 		# Track data
 		self.out += "\n\n\tSECTION_DATA(trdata) align=1\n"
-		self.out += "\nTrackData:\n"
+		self.publicLabel("Oidos_TrackData")
 		for ti in self.track_order:
 			track = self.tracks[ti]
 			instr = self.instrument_map[track.instr]
@@ -538,12 +541,12 @@ class Music:
 
 		# Lengths of notes
 		self.out += "\n\tSECTION_DATA(notelen) align=1\n"
-		self.out += "\nNoteLengths:\n"
+		self.publicLabel("Oidos_NoteLengths")
 		self.notelist(self.lendata, [0], "L_")
 
 		# Samples for notes
 		self.out += "\n\tSECTION_DATA(notesamp) align=1\n"
-		self.out += "\nNoteSamples:\n"
+		self.publicLabel("Oidos_NoteSamples")
 		self.notelist(self.samdata, [], "S_")
 
 		return self.out
