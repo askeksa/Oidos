@@ -8,7 +8,7 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use vst::buffer::AudioBuffer;
-use vst::plugin::{Category, Info, Plugin, PluginParameters};
+use vst::plugin::{Category, HostCallback, Info, Plugin, PluginParameters};
 use vst::util::ParameterTransfer;
 
 const BASE_SAMPLE_RATE: f32 = 44100.0;
@@ -246,6 +246,10 @@ impl PluginParameters for OidosReverbParameterTransfer {
 }
 
 impl Plugin for OidosReverbPlugin {
+	fn new(_host: HostCallback) -> OidosReverbPlugin {
+		OidosReverbPlugin::default()
+	}
+
 	fn get_info(&self) -> Info {
 		Info {
 			name: "OidosReverb".to_string(),

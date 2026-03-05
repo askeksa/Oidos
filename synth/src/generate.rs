@@ -62,10 +62,10 @@ pub trait SoundParameters {
 	fn release<P: Index<&'static str, Output = f32>>(p: &P, sample_rate: f32) -> f32;
 }
 
-pub trait SoundGenerator {
+pub trait SoundGenerator : Send {
 	type Parameters: SoundParameters + PartialEq + Clone + Send + Sync;
-	type Output: Default + Copy + Into<Sample>;
-	type Global: Default;
+	type Output: Default + Send + Copy + Into<Sample>;
+	type Global: Default + Send;
 
 	fn new(param: &Self::Parameters, tone: u8, time: usize, global: &Self::Global) -> Self;
 	fn produce_sample(&mut self) -> Self::Output;

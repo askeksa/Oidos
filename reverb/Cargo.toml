@@ -4,7 +4,7 @@ version = "2.1.0"
 authors = ["Aske Simon Christensen <blueberry@loonies.dk>"]
 
 [dependencies]
-vst = "0.2.0"
+vst = "0.3.0"
 
 [lib]
 name = "OidosReverb"

@@ -115,7 +115,7 @@ impl Note {
 }
 
 
-pub trait SynthInfo {
+pub trait SynthInfo : Send {
 	fn get_info() -> Info;
 }
 
