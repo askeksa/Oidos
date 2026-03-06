@@ -9,6 +9,9 @@
 ; Set to 0 if you don't care about Oidos_GenerateMusic preserving registers
 %define OIDOS_SAVE_REGISTERS 1
 
+; Set to 1 to compute each tone an instrument uses in its own thread
+%define OIDOS_MULTITHREADED 0
+
 %include "platform.inc"
 
 %include "music.asm"
@@ -32,12 +35,17 @@ extern __imp__waveOutOpen@24
 extern __imp__waveOutPrepareHeader@12
 extern __imp__waveOutWrite@12
 extern __imp__waveOutGetPosition@12
+%if OIDOS_MULTITHREADED
+extern __imp__CreateThread@24
+extern __imp__WaitForMultipleObjects@16
+%endif
 %endif
 
 extern PUBLIC_SYM(Oidos_RandomData)
 
 %define SAMPLE_RATE 44100
 %define BASE_FREQ 0.00232970791933 ; 440/((2^(1/12))^(9+12*4))/44100*(2*3.14159265358979)
+%define PARTIAL_BUFFER_SIZE 0x80000 ; Larger than 10000*3*2*8
 
 
 ;; ********** Public variables **********
@@ -96,11 +104,6 @@ WaveTime:
 
 
 ;; ********** Internal buffers **********
-
-SECTION_BSS(freqarr) align=16
-PartialArray:
-.align16:
-	resq	10000*3*2
 
 SECTION_BSS(sampbuf) align=16
 SampleBuffer:
@@ -240,11 +243,17 @@ c_ticklength:
 
 SECTION_TEXT(makeinst) align=1
 MakeInstrument:
+%if OIDOS_MULTITHREADED
+	mov				ebp, baseptr
+	mov				SAMPLE, [esp + 1*4]
+	fild			dword [SAMPLE]
+%endif
 	mov				PARAMS, [BASE + ParamsPtr]
 
 	; tone
 
-	mov				ARRAY, PartialArray
+	sub				esp, PARTIAL_BUFFER_SIZE
+	mov				ARRAY, esp
 	mov				eax, [PARAMS]		; modes
 .modeloop:
 	push			PARAMS
@@ -388,12 +397,12 @@ MakeInstrument:
 .sample:
 	xorpd			xmm4, xmm4
 
-	mov				ARRAY, PartialArray
+	mov				ARRAY, esp
 	mov				ecx, RANDOM			; npartials
 .decay:
-	movapd			xmm0, [ARRAY]		; [y1, x1]
+	movupd			xmm0, [ARRAY]		; [y1, x1]
 	add				ARRAY, byte 16
-	movapd			xmm1, [ARRAY]		; [y2, x2]
+	movupd			xmm1, [ARRAY]		; [y2, x2]
 	pshufd			xmm3, xmm1, 0xEE	; [y2, y2]
 	pshufd			xmm2, xmm1, 0x44	; [x2, x2]
 	pshufd			xmm1, xmm0, 0x4E	; [x1, y1]
@@ -401,10 +410,10 @@ MakeInstrument:
 	mulpd			xmm1, xmm3			; [x1*y2, y1*y2]
 	addsubpd		xmm0, xmm1			; [y1*x2+x1*y2, x1*x2-y1*y2]
 
-	movapd			[ARRAY], xmm0
+	movupd			[ARRAY], xmm0
 	add				ARRAY, byte 16
 
-	movapd			xmm1, [ARRAY]
+	movupd			xmm1, [ARRAY]
 	pshufd			xmm3, xmm1, 0xEE
 	pshufd			xmm2, xmm1, 0x44
 	minpd			xmm2, xmm3
@@ -416,7 +425,7 @@ MakeInstrument:
 	addpd			xmm4, xmm0
 
 	addpd			xmm1, xmm7
-	movapd			[ARRAY], xmm1
+	movupd			[ARRAY], xmm1
 	add				ARRAY, byte 16
 	loop			.decay
 
@@ -437,6 +446,7 @@ MakeInstrument:
 	dec				eax
 	jne				.sample
 
+	add				esp, PARTIAL_BUFFER_SIZE
 	ret
 
 
@@ -445,6 +455,46 @@ MakeInstrument:
 SECTION_TEXT(makechan) align=1
 MakeChannel:
 	mov				SAMPLE, SampleBuffer
+%if OIDOS_MULTITHREADED
+	xor				ebx, ebx
+	mov				ebp, esp
+.tonesloop:
+	mov				TONE, [TonesPtr]
+	lodsb
+	mov				[TonesPtr], TONE
+	movsx			eax, al
+	add				ebx, eax
+	js				.tonesdone
+	mov				[SAMPLE], ebx
+
+	push			byte 0 ; lpThreadId
+	push			byte 0 ; dwCreationFlags
+	push			SAMPLE ; lpParameter
+	push			MakeInstrument ; lpStartAddress
+	push			byte 0 ; dwStackSize
+	push			byte 0 ; lpThreadAttributes
+	call			[__imp__CreateThread@24]
+	push			eax
+
+	mov				PARAMS, [ParamsPtr]
+	mov				eax, [PARAMS + p_maxsamples]
+	shl				eax, 4
+	add				SAMPLE, eax
+	jmp				.tonesloop
+.tonesdone:
+	mov				eax, esp
+	mov				ecx, ebp
+	sub				ecx, esp
+	shr				ecx, 2
+	push			0x01000000 ; dwMilliseconds
+	push			byte 1 ; bWaitAll
+	push			eax ; lpHandles
+	push			ecx ; nCount
+	call			[__imp__WaitForMultipleObjects@16]
+
+	mov				esp, ebp
+	mov				ebp, baseptr
+%else
 	push			byte 0
 .tonesloop:
 	mov				TONE, [BASE + TonesPtr]
@@ -458,6 +508,7 @@ MakeChannel:
 	jmp				.tonesloop
 .tonesdone:
 	pop				eax
+%endif
 
 .column:
 	mov				dword [BASE + MixingPtr], MixingBuffer
