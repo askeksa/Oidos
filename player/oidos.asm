@@ -7,10 +7,14 @@
 %define OIDOS_TIMER_OFFSET 2048
 
 ; Set to 0 if you don't care about Oidos_GenerateMusic preserving registers
+%ifndef OIDOS_SAVE_REGISTERS
 %define OIDOS_SAVE_REGISTERS 1
+%endif
 
 ; Set to 1 to compute each tone an instrument uses in its own thread
+%ifndef OIDOS_MULTITHREADED
 %define OIDOS_MULTITHREADED 0
+%endif
 
 %include "platform.inc"
 
