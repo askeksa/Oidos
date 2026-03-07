@@ -49,7 +49,6 @@ extern PUBLIC_SYM(Oidos_RandomData)
 
 %define SAMPLE_RATE 44100
 %define BASE_FREQ 0.00232970791933 ; 440/((2^(1/12))^(9+12*4))/44100*(2*3.14159265358979)
-%define PARTIAL_BUFFER_SIZE 0x80000 ; Larger than 10000*3*2*8
 
 
 ;; ********** Public variables **********
@@ -250,18 +249,13 @@ MakeInstrument:
 %if OIDOS_MULTITHREADED
 	mov				ebp, baseptr
 	mov				SAMPLE, [esp + 1*4]
-	fild			dword [SAMPLE]
+	fild			dword [SAMPLE]		; tone
 %endif
+
 	mov				PARAMS, [BASE + ParamsPtr]
-
-	; tone
-
-	sub				esp, PARTIAL_BUFFER_SIZE
-	mov				ARRAY, esp
 	mov				eax, [PARAMS]		; modes
 .modeloop:
-	push			PARAMS
-
+	mov				PARAMS, [BASE + ParamsPtr]
 	mov				RANDOM, [PARAMS]
 	add				PARAMS, byte 4
 
@@ -311,7 +305,8 @@ MakeInstrument:
 	; mamp, reltone2, ampmul, tone
 
 .partialloop:
-	push			PARAMS
+	sub				esp, byte 3*2*8
+	mov				ARRAY, esp
 
 	GETRANDOM
 	fmul			dword [PARAMS]		; width
@@ -362,16 +357,14 @@ MakeInstrument:
 	fld1
 	faddp			st1
 	fstp			qword [ARRAY]
-	add				ARRAY, byte 8
 
-	pop				PARAMS
+	sub				PARAMS, byte p_fslopehigh-p_width
 	loop			.partialloop
 
 	fstp			st0
 	fstp			st0
 	fstp			st0
 
-	pop				PARAMS
 	dec				eax
 	jne				.modeloop
 
@@ -379,6 +372,7 @@ MakeInstrument:
 
 
 	; Gain helper values
+	mov				PARAMS, [BASE + ParamsPtr]
 	mov				RANDOM, [PARAMS]	; modes
 	add				PARAMS, byte 4
 	imul			RANDOM, [PARAMS]	; fat
@@ -450,7 +444,7 @@ MakeInstrument:
 	dec				eax
 	jne				.sample
 
-	add				esp, PARTIAL_BUFFER_SIZE
+	mov				esp, ARRAY
 	ret
 
 
